@@ -2,6 +2,7 @@ package com.example.boardinghouse.common.exception;
 
 import com.example.boardinghouse.common.dto.ApiResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -36,6 +37,12 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         return ApiResponse.error("Validation failed: " + errors.toString());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Object> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        return ApiResponse.error("Invalid request body");
     }
 
     @ExceptionHandler(Exception.class)
