@@ -3,17 +3,16 @@ package com.example.boardinghouse.service;
 import com.example.boardinghouse.common.exception.BadRequestException;
 import com.example.boardinghouse.domain.entity.Invoice;
 import com.example.boardinghouse.domain.enums.InvoiceStatus;
+import com.example.boardinghouse.domain.enums.MaintenanceStatus;
 import com.example.boardinghouse.domain.enums.RoomStatus;
 import com.example.boardinghouse.dto.dashboard.DashboardDebtsResponse;
 import com.example.boardinghouse.dto.dashboard.DashboardRevenueResponse;
 import com.example.boardinghouse.dto.dashboard.DashboardRoomsStatusResponse;
 import com.example.boardinghouse.dto.dashboard.DashboardSummaryResponse;
 import com.example.boardinghouse.repository.InvoiceRepository;
+import com.example.boardinghouse.repository.MaintenanceRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -33,7 +32,7 @@ public class DashboardService {
 
     private final RoomRepository roomRepository;
     private final InvoiceRepository invoiceRepository;
-    private final MongoTemplate mongoTemplate;
+    private final MaintenanceRepository maintenanceRepository;
 
     public DashboardSummaryResponse getSummary() {
         LocalDate today = LocalDate.now();
@@ -134,8 +133,7 @@ public class DashboardService {
     }
 
     private long countPendingMaintenanceRequests() {
-        Query query = Query.query(Criteria.where("status").is("PENDING"));
-        return mongoTemplate.count(query, "maintenance_requests");
+        return maintenanceRepository.countByStatus(MaintenanceStatus.PENDING);
     }
 
     private Period resolvePeriod(Integer month, Integer year) {

@@ -3,27 +3,25 @@ package com.example.boardinghouse.service;
 import com.example.boardinghouse.common.exception.BadRequestException;
 import com.example.boardinghouse.domain.entity.Invoice;
 import com.example.boardinghouse.domain.enums.InvoiceStatus;
+import com.example.boardinghouse.domain.enums.MaintenanceStatus;
 import com.example.boardinghouse.domain.enums.RoomStatus;
 import com.example.boardinghouse.dto.dashboard.DashboardDebtsResponse;
 import com.example.boardinghouse.dto.dashboard.DashboardRevenueResponse;
 import com.example.boardinghouse.dto.dashboard.DashboardSummaryResponse;
 import com.example.boardinghouse.repository.InvoiceRepository;
+import com.example.boardinghouse.repository.MaintenanceRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Query;
 
 import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,7 +34,7 @@ class DashboardServiceTest {
     private InvoiceRepository invoiceRepository;
 
     @Mock
-    private MongoTemplate mongoTemplate;
+    private MaintenanceRepository maintenanceRepository;
 
     @InjectMocks
     private DashboardService dashboardService;
@@ -60,7 +58,7 @@ class DashboardServiceTest {
         when(invoiceRepository.findByStatus(InvoiceStatus.PARTIAL)).thenReturn(List.of());
         when(invoiceRepository.findByStatus(InvoiceStatus.OVERDUE))
                 .thenReturn(List.of(invoice("invoice-5", InvoiceStatus.OVERDUE, 400L)));
-        when(mongoTemplate.count(any(Query.class), eq("maintenance_requests"))).thenReturn(2L);
+        when(maintenanceRepository.countByStatus(MaintenanceStatus.PENDING)).thenReturn(2L);
 
         DashboardSummaryResponse response = dashboardService.getSummary();
 
