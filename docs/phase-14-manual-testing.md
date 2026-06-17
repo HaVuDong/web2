@@ -67,3 +67,41 @@ Do not mark Phase 14 as complete until:
 - `POST /api/invoices/{invoiceId}/payment-link` succeeds.
 - `POST /api/webhooks/payos` with a verified signature marks the payment as `PAID`.
 - The related invoice becomes `PAID`.
+
+## Retest: 2026-06-17 18:13
+
+After updating PayOS keys in `.env`, the backend was restarted and Phase 14 was run again with new test data.
+
+Passed again:
+
+- Health check.
+- OWNER login.
+- Property creation.
+- Room creation.
+- Tenant creation.
+- Contract creation.
+- Room `OCCUPIED` verification.
+- Tenant `currentRoomId` verification.
+- Service price configuration.
+- Meter reading creation.
+- Invoice generation.
+- Invoice total verification.
+
+Retest data:
+
+```txt
+propertyId=6a32813180f94c540bc3df30
+roomId=6a32813180f94c540bc3df31
+tenantId=6a32813180f94c540bc3df32
+contractId=6a32813280f94c540bc3df33
+meterReadingId=6a32813380f94c540bc3df35
+invoiceId=6a32813380f94c540bc3df36
+```
+
+PayOS payment link creation still failed with the same gateway response:
+
+```txt
+PayOS create payment link failed: Cong thanh toan khong ton tai hoac da tam dung, vui long chon cong khac
+```
+
+Conclusion: `.env` is being loaded and the backend can reach PayOS, but the configured PayOS payment gateway/credential is still not usable for creating payment links.
