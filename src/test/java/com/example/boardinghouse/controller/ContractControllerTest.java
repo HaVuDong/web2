@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.Contract;
 import com.example.boardinghouse.domain.enums.ContractStatus;
 import com.example.boardinghouse.security.CustomUserDetailsService;
@@ -34,6 +35,9 @@ class ContractControllerTest {
 
     @MockBean
     private ContractService contractService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -141,3 +145,4 @@ class ContractControllerTest {
                 .build();
     }
 }
+

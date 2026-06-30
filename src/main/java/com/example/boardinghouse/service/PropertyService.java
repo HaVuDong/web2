@@ -2,10 +2,12 @@ package com.example.boardinghouse.service;
 
 import com.example.boardinghouse.common.exception.BadRequestException;
 import com.example.boardinghouse.common.exception.ResourceNotFoundException;
+import com.example.boardinghouse.common.util.SoftDeleteHelper;
 import com.example.boardinghouse.domain.entity.Property;
 import com.example.boardinghouse.dto.property.CreatePropertyRequest;
 import com.example.boardinghouse.dto.property.UpdatePropertyRequest;
 import com.example.boardinghouse.repository.PropertyRepository;
+import com.example.boardinghouse.security.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -20,6 +22,8 @@ public class PropertyService {
 
     private final PropertyRepository propertyRepository;
     private final MongoTemplate mongoTemplate;
+    private final CurrentUserService currentUserService;
+    private final AuditService auditService;
 
     /**
      * Lấy danh sách tất cả các tòa nhà/khu trọ trong hệ thống.
@@ -27,14 +31,14 @@ public class PropertyService {
      * @return Danh sách tòa nhà
      */
     public List<Property> getAllProperties() {
-        return propertyRepository.findAll();
+        return propertyRepository.findByOwnerId(currentUserService.getOwnerId());
     }
 
     /**
      * Lấy thông tin một tòa nhà theo ID. Ném ngoại lệ nếu không tìm thấy.
      */
     public Property getPropertyById(String id) {
-        return propertyRepository.findById(id)
+        return propertyRepository.findByIdAndOwnerId(id, currentUserService.getOwnerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Property not found with id: " + id));
     }
 
@@ -46,14 +50,18 @@ public class PropertyService {
      * @return Tòa nhà vừa tạo
      */
     public Property createProperty(CreatePropertyRequest request, String createdBy) {
+        String ownerId = currentUserService.getOwnerId();
         Property property = Property.builder()
+                .ownerId(ownerId)
                 .name(request.getName())
                 .address(request.getAddress())
                 .description(request.getDescription())
                 .createdBy(createdBy)
                 .build();
 
-        return propertyRepository.save(property);
+        Property saved = propertyRepository.save(property);
+        auditService.log("CREATE", "PROPERTY", saved.getId(), null, saved);
+        return saved;
     }
 
     /**
@@ -61,11 +69,18 @@ public class PropertyService {
      */
     public Property updateProperty(String id, UpdatePropertyRequest request) {
         Property property = getPropertyById(id);
+        Property before = Property.builder()
+                .id(property.getId()).ownerId(property.getOwnerId())
+                .name(property.getName()).address(property.getAddress())
+                .description(property.getDescription()).build();
+
         property.setName(request.getName());
         property.setAddress(request.getAddress());
         property.setDescription(request.getDescription());
 
-        return propertyRepository.save(property);
+        Property saved = propertyRepository.save(property);
+        auditService.log("UPDATE", "PROPERTY", saved.getId(), before, saved);
+        return saved;
     }
 
     /**
@@ -75,7 +90,9 @@ public class PropertyService {
     public void deleteProperty(String id) {
         Property property = getPropertyById(id);
         long roomCount = mongoTemplate.count(
-                Query.query(Criteria.where("propertyId").is(id)),
+                Query.query(Criteria.where("propertyId").is(id)
+                        .and("ownerId").is(property.getOwnerId())
+                        .and("deleted").ne(true)),
                 "rooms"
         );
 
@@ -83,6 +100,8 @@ public class PropertyService {
             throw new BadRequestException("Cannot delete property because it still has rooms");
         }
 
-        propertyRepository.delete(property);
+        SoftDeleteHelper.markDeleted(property, currentUserService.getOwnerId());
+        propertyRepository.save(property);
+        auditService.log("SOFT_DELETE", "PROPERTY", property.getId(), null, property);
     }
 }

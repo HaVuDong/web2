@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.Payment;
 import com.example.boardinghouse.domain.enums.PaymentProvider;
 import com.example.boardinghouse.domain.enums.PaymentStatus;
@@ -33,6 +34,9 @@ class PaymentControllerTest {
 
     @MockBean
     private PaymentService paymentService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -110,3 +114,4 @@ class PaymentControllerTest {
                 .build();
     }
 }
+

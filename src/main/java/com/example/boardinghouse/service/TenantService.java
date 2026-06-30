@@ -8,6 +8,7 @@ import com.example.boardinghouse.dto.tenant.CreateTenantRequest;
 import com.example.boardinghouse.dto.tenant.UpdateTenantRequest;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
+import com.example.boardinghouse.security.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -26,6 +27,7 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final RoomRepository roomRepository;
     private final MongoTemplate mongoTemplate;
+    private final CurrentUserService currentUserService;
 
     /**
      * Lấy danh sách khách thuê trọ dựa trên từ khóa tìm kiếm (tên, số điện thoại) và trạng thái.
@@ -36,12 +38,15 @@ public class TenantService {
      * @return Danh sách khách thuê phù hợp với điều kiện
      */
     public List<Tenant> getTenants(String keyword, TenantStatus status) {
+        String ownerId = currentUserService.getOwnerId();
         boolean hasKeyword = StringUtils.hasText(keyword);
         if (!hasKeyword && status == null) {
-            return tenantRepository.findAll();
+            return tenantRepository.findByOwnerId(ownerId);
         }
 
         List<Criteria> criteria = new ArrayList<>();
+        criteria.add(Criteria.where("ownerId").is(ownerId));
+        criteria.add(Criteria.where("deleted").ne(true));
         if (hasKeyword) {
             String escapedKeyword = Pattern.quote(keyword.trim());
             criteria.add(new Criteria().orOperator(
@@ -71,10 +76,12 @@ public class TenantService {
      * @return Khách thuê mới vừa được lưu vào CSDL
      */
     public Tenant createTenant(CreateTenantRequest request) {
+        String ownerId = currentUserService.getOwnerId();
         TenantStatus status = request.getStatus() == null ? TenantStatus.ACTIVE : request.getStatus();
-        String currentRoomId = resolveCurrentRoomId(request.getCurrentRoomId(), status);
+        String currentRoomId = resolveCurrentRoomId(request.getCurrentRoomId(), status, ownerId);
 
         Tenant tenant = Tenant.builder()
+                .ownerId(ownerId)
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
                 .email(request.getEmail())
@@ -97,7 +104,7 @@ public class TenantService {
      * @return Thông tin khách thuê
      */
     public Tenant getTenantById(String id) {
-        return tenantRepository.findById(id)
+        return tenantRepository.findByIdAndOwnerId(id, currentUserService.getOwnerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant not found with id: " + id));
     }
 
@@ -111,8 +118,16 @@ public class TenantService {
      */
     public Tenant updateTenant(String id, UpdateTenantRequest request) {
         Tenant tenant = getTenantById(id);
+        String ownerId = tenant.getOwnerId();
         TenantStatus status = request.getStatus() == null ? tenant.getStatus() : request.getStatus();
-        String currentRoomId = resolveCurrentRoomId(request.getCurrentRoomId(), status);
+        
+        // Cần kiểm tra xem khách thuê có hợp đồng đang hoạt động không nếu trạng thái đổi thành LEFT
+        if (status == TenantStatus.LEFT && tenant.getStatus() != TenantStatus.LEFT) {
+            ensureTenantHasNoActiveContract(id, tenant.getOwnerId());
+            currentRoomId = null; // Tự động xóa phòng hiện tại khi rời đi
+        } else {
+            currentRoomId = resolveCurrentRoomId(request.getCurrentRoomId(), status, ownerId);
+        }
 
         tenant.setFullName(request.getFullName());
         tenant.setPhone(request.getPhone());
@@ -137,14 +152,8 @@ public class TenantService {
      */
     public void markTenantLeft(String id) {
         Tenant tenant = getTenantById(id);
-        long activeContractCount = mongoTemplate.count(
-                Query.query(Criteria.where("tenantIds").is(id).and("status").is("ACTIVE")),
-                "contracts"
-        );
-
-        if (activeContractCount > 0) {
-            throw new BadRequestException("Cannot mark tenant as left because tenant has an active contract");
-        }
+        
+        ensureTenantHasNoActiveContract(id, tenant.getOwnerId());
 
         tenant.setStatus(TenantStatus.LEFT);
         tenant.setCurrentRoomId(null);
@@ -159,11 +168,12 @@ public class TenantService {
      * @return Danh sách khách thuê trong phòng
      */
     public List<Tenant> getTenantsByRoomId(String roomId) {
-        if (!roomRepository.existsById(roomId)) {
+        String ownerId = currentUserService.getOwnerId();
+        if (roomRepository.findByIdAndOwnerId(roomId, ownerId).isEmpty()) {
             throw new ResourceNotFoundException("Room not found with id: " + roomId);
         }
 
-        return tenantRepository.findByCurrentRoomId(roomId);
+        return tenantRepository.findByCurrentRoomIdAndOwnerId(roomId, ownerId);
     }
 
     /**
@@ -175,15 +185,33 @@ public class TenantService {
      * @param status Trạng thái khách thuê
      * @return ID phòng hợp lệ hoặc null
      */
-    private String resolveCurrentRoomId(String currentRoomId, TenantStatus status) {
+    private String resolveCurrentRoomId(String currentRoomId, TenantStatus status, String ownerId) {
         if (status == TenantStatus.LEFT) {
             return null;
         }
 
-        if (StringUtils.hasText(currentRoomId) && !roomRepository.existsById(currentRoomId)) {
+        if (StringUtils.hasText(currentRoomId) && roomRepository.findByIdAndOwnerId(currentRoomId, ownerId).isEmpty()) {
             throw new ResourceNotFoundException("Room not found with id: " + currentRoomId);
         }
 
         return StringUtils.hasText(currentRoomId) ? currentRoomId : null;
+    }
+
+    /**
+     * Kiểm tra xem khách thuê có hợp đồng nào đang ACTIVE hay không.
+     * Dùng khi đổi trạng thái khách thuê sang LEFT (đã rời đi).
+     */
+    private void ensureTenantHasNoActiveContract(String tenantId, String ownerId) {
+        long activeContractCount = mongoTemplate.count(
+                Query.query(Criteria.where("tenantIds").is(tenantId)
+                        .and("ownerId").is(ownerId)
+                        .and("status").is("ACTIVE")
+                        .and("deleted").ne(true)),
+                "contracts"
+        );
+
+        if (activeContractCount > 0) {
+            throw new BadRequestException("Cannot mark tenant as left because tenant has an active contract");
+        }
     }
 }

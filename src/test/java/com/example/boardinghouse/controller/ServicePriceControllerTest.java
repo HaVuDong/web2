@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.ServicePrice;
 import com.example.boardinghouse.security.CustomUserDetailsService;
 import com.example.boardinghouse.security.JwtAuthFilter;
@@ -30,6 +31,9 @@ class ServicePriceControllerTest {
 
     @MockBean
     private ServicePriceService servicePriceService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -101,3 +105,4 @@ class ServicePriceControllerTest {
                 .build();
     }
 }
+

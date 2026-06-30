@@ -2,6 +2,7 @@ package com.example.boardinghouse.controller;
 
 import com.example.boardinghouse.common.dto.ApiResponse;
 import com.example.boardinghouse.domain.entity.Payment;
+import com.example.boardinghouse.dto.payment.ManualPaymentRequest;
 import com.example.boardinghouse.dto.payment.PaymentLinkResponse;
 import com.example.boardinghouse.dto.payment.PayosWebhookRequest;
 import com.example.boardinghouse.service.PaymentService;
@@ -31,6 +32,24 @@ public class PaymentController {
     public ApiResponse<PaymentLinkResponse> createPaymentLink(@PathVariable String invoiceId) {
         PaymentLinkResponse response = paymentService.createPaymentLink(invoiceId);
         return ApiResponse.success("Payment link created successfully", response);
+    }
+
+    @PostMapping("/invoices/{invoiceId}/payments/cash")
+    public ApiResponse<Payment> recordCashPayment(
+            @PathVariable String invoiceId,
+            @Valid @RequestBody(required = false) ManualPaymentRequest request
+    ) {
+        Payment payment = paymentService.recordCashPayment(invoiceId, request);
+        return ApiResponse.success("Cash payment recorded successfully", payment);
+    }
+
+    @PostMapping("/invoices/{invoiceId}/payments/bank-transfer")
+    public ApiResponse<Payment> recordBankTransferPayment(
+            @PathVariable String invoiceId,
+            @Valid @RequestBody(required = false) ManualPaymentRequest request
+    ) {
+        Payment payment = paymentService.recordBankTransferPayment(invoiceId, request);
+        return ApiResponse.success("Bank transfer payment recorded successfully", payment);
     }
 
     /**

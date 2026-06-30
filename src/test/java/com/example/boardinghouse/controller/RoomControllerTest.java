@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.Room;
 import com.example.boardinghouse.domain.enums.RoomStatus;
 import com.example.boardinghouse.security.CustomUserDetailsService;
@@ -34,6 +35,9 @@ class RoomControllerTest {
 
     @MockBean
     private RoomService roomService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -143,3 +147,4 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.message").value("Invalid request body"));
     }
 }
+

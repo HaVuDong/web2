@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.Property;
 import com.example.boardinghouse.domain.entity.User;
 import com.example.boardinghouse.domain.enums.UserRole;
@@ -37,6 +38,9 @@ class PropertyControllerTest {
 
     @MockBean
     private PropertyService propertyService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -123,3 +127,4 @@ class PropertyControllerTest {
         return new CustomUserDetails(user);
     }
 }
+

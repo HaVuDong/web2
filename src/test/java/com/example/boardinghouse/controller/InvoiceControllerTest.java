@@ -1,10 +1,12 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.Invoice;
 import com.example.boardinghouse.domain.enums.InvoiceStatus;
 import com.example.boardinghouse.security.CustomUserDetailsService;
 import com.example.boardinghouse.security.JwtAuthFilter;
 import com.example.boardinghouse.service.InvoiceService;
+import com.example.boardinghouse.service.PaymentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
@@ -32,6 +34,12 @@ class InvoiceControllerTest {
 
     @MockBean
     private InvoiceService invoiceService;
+
+    @MockBean
+    private PaymentService paymentService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -77,7 +85,8 @@ class InvoiceControllerTest {
 
     @Test
     void markPaidReturnsPaidInvoice() throws Exception {
-        when(invoiceService.markPaid("invoice-1")).thenReturn(invoice(InvoiceStatus.PAID));
+        when(paymentService.recordCashPayment(any(), any())).thenReturn(com.example.boardinghouse.domain.entity.Payment.builder().build());
+        when(invoiceService.getInvoiceById("invoice-1")).thenReturn(invoice(InvoiceStatus.PAID));
 
         mockMvc.perform(patch("/api/invoices/invoice-1/mark-paid"))
                 .andExpect(status().isOk())
@@ -109,3 +118,4 @@ class InvoiceControllerTest {
                 .build();
     }
 }
+

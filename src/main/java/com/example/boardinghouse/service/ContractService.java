@@ -15,6 +15,7 @@ import com.example.boardinghouse.dto.contract.UpdateContractRequest;
 import com.example.boardinghouse.repository.ContractRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
+import com.example.boardinghouse.security.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -31,6 +33,8 @@ public class ContractService {
     private final ContractRepository contractRepository;
     private final RoomRepository roomRepository;
     private final TenantRepository tenantRepository;
+    private final CurrentUserService currentUserService;
+    private final AuditService auditService;
 
     /**
      * Lấy danh sách toàn bộ hợp đồng thuê phòng.
@@ -38,7 +42,7 @@ public class ContractService {
      * @return Danh sách các hợp đồng
      */
     public List<Contract> getAllContracts() {
-        return contractRepository.findAll();
+        return contractRepository.findByOwnerId(currentUserService.getOwnerId());
     }
 
     /**
@@ -52,13 +56,18 @@ public class ContractService {
      * @return Hợp đồng mới được lưu
      */
     public Contract createContract(CreateContractRequest request) {
-        Room room = getRoom(request.getRoomId());
+        String ownerId = currentUserService.getOwnerId();
+        Room room = getRoom(request.getRoomId(), ownerId);
         List<String> tenantIds = normalizeTenantIds(request.getTenantIds());
-        List<Tenant> tenants = getTenants(tenantIds);
+        List<Tenant> tenants = getTenants(tenantIds, ownerId);
         validateDateRange(request.getStartDate(), request.getEndDate());
-        ensureRoomHasNoActiveContract(room.getId());
+        validateRoomForNewContract(room);
+        validateRoomCapacity(room, tenantIds);
+        ensureRoomHasNoActiveContract(room.getId(), ownerId);
+        ensureTenantsHaveNoActiveContract(tenantIds, ownerId);
 
         Contract contract = Contract.builder()
+                .ownerId(ownerId)
                 .roomId(room.getId())
                 .tenantIds(tenantIds)
                 .startDate(request.getStartDate())
@@ -71,6 +80,7 @@ public class ContractService {
                 .build();
 
         Contract savedContract = contractRepository.save(contract);
+        auditService.log("CREATE", "CONTRACT", savedContract.getId(), null, savedContract);
 
         room.setStatus(RoomStatus.OCCUPIED);
         roomRepository.save(room);
@@ -92,7 +102,7 @@ public class ContractService {
      * @return Hợp đồng
      */
     public Contract getContractById(String id) {
-        return contractRepository.findById(id)
+        return contractRepository.findByIdAndOwnerId(id, currentUserService.getOwnerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Contract not found with id: " + id));
     }
 
@@ -118,7 +128,9 @@ public class ContractService {
         contract.setPaymentDueDay(request.getPaymentDueDay());
         contract.setNote(request.getNote());
 
-        return contractRepository.save(contract);
+        Contract saved = contractRepository.save(contract);
+        auditService.log("UPDATE", "CONTRACT", saved.getId(), null, saved);
+        return saved;
     }
 
     /**
@@ -144,13 +156,17 @@ public class ContractService {
             contract.setNote(request.getNote());
         }
         Contract savedContract = contractRepository.save(contract);
+        auditService.log("TERMINATE", "CONTRACT", savedContract.getId(), null, savedContract);
 
-        roomRepository.findById(contract.getRoomId()).ifPresent(room -> {
+        roomRepository.findByIdAndOwnerId(contract.getRoomId(), contract.getOwnerId()).ifPresent(room -> {
             room.setStatus(roomStatus);
             roomRepository.save(room);
         });
 
-        List<Tenant> tenants = tenantRepository.findAllById(contract.getTenantIds());
+        List<Tenant> tenants = contract.getTenantIds().stream()
+                .map(tenantId -> tenantRepository.findByIdAndOwnerId(tenantId, contract.getOwnerId()))
+                .flatMap(Optional::stream)
+                .toList();
         tenants.forEach(tenant -> {
             tenant.setCurrentRoomId(null);
             tenant.setStatus(TenantStatus.LEFT);
@@ -193,22 +209,27 @@ public class ContractService {
             contract.setNote(request.getNote());
         }
 
-        return contractRepository.save(contract);
+        Contract saved = contractRepository.save(contract);
+        auditService.log("RENEW", "CONTRACT", saved.getId(), null, saved);
+        return saved;
     }
 
     /**
      * Lấy thông tin phòng dựa theo ID, ném ngoại lệ nếu không có.
      */
-    private Room getRoom(String roomId) {
-        return roomRepository.findById(roomId)
+    private Room getRoom(String roomId, String ownerId) {
+        return roomRepository.findByIdAndOwnerId(roomId, ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId));
     }
 
     /**
      * Lấy danh sách khách thuê theo ID, đảm bảo tất cả ID đều hợp lệ.
      */
-    private List<Tenant> getTenants(List<String> tenantIds) {
-        List<Tenant> tenants = tenantRepository.findAllById(tenantIds);
+    private List<Tenant> getTenants(List<String> tenantIds, String ownerId) {
+        List<Tenant> tenants = tenantIds.stream()
+                .map(tenantId -> tenantRepository.findByIdAndOwnerId(tenantId, ownerId)
+                        .orElseThrow(() -> new ResourceNotFoundException("One or more tenants were not found")))
+                .toList();
         if (tenants.size() != tenantIds.size()) {
             throw new ResourceNotFoundException("One or more tenants were not found");
         }
@@ -240,11 +261,33 @@ public class ContractService {
     /**
      * Đảm bảo phòng chưa có bất kỳ hợp đồng nào đang ACTIVE (đang thuê).
      */
-    private void ensureRoomHasNoActiveContract(String roomId) {
-        contractRepository.findByRoomIdAndStatus(roomId, ContractStatus.ACTIVE)
+    private void ensureRoomHasNoActiveContract(String roomId, String ownerId) {
+        contractRepository.findByRoomIdAndOwnerIdAndStatus(roomId, ownerId, ContractStatus.ACTIVE)
                 .ifPresent(contract -> {
                     throw new BadRequestException("Room already has an active contract");
                 });
+    }
+
+    private void ensureTenantsHaveNoActiveContract(List<String> tenantIds, String ownerId) {
+        boolean hasActiveContract = contractRepository.findByOwnerId(ownerId).stream()
+                .filter(contract -> contract.getStatus() == ContractStatus.ACTIVE)
+                .flatMap(contract -> contract.getTenantIds().stream())
+                .anyMatch(tenantIds::contains);
+        if (hasActiveContract) {
+            throw new BadRequestException("Tenant already has an active contract");
+        }
+    }
+
+    private void validateRoomForNewContract(Room room) {
+        if (room.getStatus() != RoomStatus.AVAILABLE) {
+            throw new BadRequestException("Room must be available before creating a contract");
+        }
+    }
+
+    private void validateRoomCapacity(Room room, List<String> tenantIds) {
+        if (room.getMaxTenants() != null && tenantIds.size() > room.getMaxTenants()) {
+            throw new BadRequestException("Tenant count exceeds room capacity");
+        }
     }
 
     /**

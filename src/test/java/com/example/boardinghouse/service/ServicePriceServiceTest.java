@@ -5,6 +5,8 @@ import com.example.boardinghouse.domain.entity.ServicePrice;
 import com.example.boardinghouse.dto.serviceprice.UpdateServicePriceRequest;
 import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.repository.ServicePriceRepository;
+import com.example.boardinghouse.security.CurrentUserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ServicePriceServiceTest {
@@ -29,13 +32,21 @@ class ServicePriceServiceTest {
     @Mock
     private PropertyRepository propertyRepository;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
     @InjectMocks
     private ServicePriceService servicePriceService;
 
+    @BeforeEach
+    void setUpOwner() {
+        lenient().when(currentUserService.getOwnerId()).thenReturn("owner-1");
+    }
+
     @Test
     void getServicePriceCreatesDefaultWhenMissing() {
-        when(propertyRepository.existsById("property-1")).thenReturn(true);
-        when(servicePriceRepository.findByPropertyId("property-1")).thenReturn(Optional.empty());
+        when(propertyRepository.findByIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.of(new com.example.boardinghouse.domain.entity.Property()));
+        when(servicePriceRepository.findByPropertyIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.empty());
         when(servicePriceRepository.save(any(ServicePrice.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ServicePrice servicePrice = servicePriceService.getServicePrice("property-1");
@@ -44,12 +55,14 @@ class ServicePriceServiceTest {
         assertThat(servicePrice.getWaterPrice()).isEqualTo(15000L);
         assertThat(servicePrice.getWifiFee()).isZero();
         assertThat(servicePrice.getPropertyId()).isEqualTo("property-1");
+        assertThat(servicePrice.getOwnerId()).isEqualTo("owner-1");
     }
 
     @Test
     void updateServicePriceUpdatesExistingConfig() {
         ServicePrice existingServicePrice = ServicePrice.builder()
                 .id("service-price-1")
+                .ownerId("owner-1")
                 .propertyId("property-1")
                 .electricityPrice(3500L)
                 .waterPrice(15000L)
@@ -58,8 +71,8 @@ class ServicePriceServiceTest {
                 .parkingFee(0L)
                 .build();
 
-        when(propertyRepository.existsById("property-1")).thenReturn(true);
-        when(servicePriceRepository.findByPropertyId("property-1")).thenReturn(Optional.of(existingServicePrice));
+        when(propertyRepository.findByIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.of(new com.example.boardinghouse.domain.entity.Property()));
+        when(servicePriceRepository.findByPropertyIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.of(existingServicePrice));
         when(servicePriceRepository.save(any(ServicePrice.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ServicePrice servicePrice = servicePriceService.updateServicePrice("property-1", updateRequest());
@@ -71,7 +84,7 @@ class ServicePriceServiceTest {
 
     @Test
     void getServicePriceRejectsMissingProperty() {
-        when(propertyRepository.existsById("missing")).thenReturn(false);
+        when(propertyRepository.findByIdAndOwnerId("missing", "owner-1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> servicePriceService.getServicePrice("missing"))
                 .isInstanceOf(ResourceNotFoundException.class)

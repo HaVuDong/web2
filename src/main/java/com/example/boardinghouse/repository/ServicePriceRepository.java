@@ -10,4 +10,6 @@ import java.util.Optional;
  */
 public interface ServicePriceRepository extends MongoRepository<ServicePrice, String> {
     Optional<ServicePrice> findByPropertyId(String propertyId);
+
+    Optional<ServicePrice> findByPropertyIdAndOwnerId(String propertyId, String ownerId);
 }

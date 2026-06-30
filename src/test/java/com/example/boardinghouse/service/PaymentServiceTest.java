@@ -6,6 +6,7 @@ import com.example.boardinghouse.config.PayosProperties;
 import com.example.boardinghouse.domain.entity.Invoice;
 import com.example.boardinghouse.domain.entity.Payment;
 import com.example.boardinghouse.domain.enums.InvoiceStatus;
+import com.example.boardinghouse.domain.enums.PaymentMethod;
 import com.example.boardinghouse.domain.enums.PaymentProvider;
 import com.example.boardinghouse.domain.enums.PaymentStatus;
 import com.example.boardinghouse.dto.payment.PaymentLinkResponse;
@@ -15,6 +16,7 @@ import com.example.boardinghouse.dto.payment.PayosWebhookRequest;
 import com.example.boardinghouse.repository.InvoiceRepository;
 import com.example.boardinghouse.repository.PaymentRepository;
 import com.example.boardinghouse.realtime.RealtimeEventPublisher;
+import com.example.boardinghouse.security.CurrentUserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +36,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
@@ -52,6 +55,12 @@ class PaymentServiceTest {
 
     @Mock
     private RealtimeEventPublisher realtimeEventPublisher;
+
+    @Mock
+    private CurrentUserService currentUserService;
+
+    @Mock
+    private AuditService auditService;
 
     private PayosSignatureService payosSignatureService;
 
@@ -74,14 +83,17 @@ class PaymentServiceTest {
                 payosSignatureService,
                 payosProperties,
                 orderCodeGenerator,
-                realtimeEventPublisher
+                realtimeEventPublisher,
+                currentUserService,
+                auditService
         );
+        lenient().when(currentUserService.getOwnerId()).thenReturn("owner-1");
     }
 
     @Test
     void createPaymentLinkCreatesPendingPayment() {
-        when(invoiceRepository.findById("invoice-1")).thenReturn(Optional.of(invoice(InvoiceStatus.UNPAID)));
-        when(paymentRepository.findFirstByInvoiceIdAndStatus("invoice-1", PaymentStatus.PENDING)).thenReturn(Optional.empty());
+        when(invoiceRepository.findByIdAndOwnerId("invoice-1", "owner-1")).thenReturn(Optional.of(invoice(InvoiceStatus.UNPAID)));
+        when(paymentRepository.findFirstByInvoiceIdAndOwnerIdAndStatus("invoice-1", "owner-1", PaymentStatus.PENDING)).thenReturn(Optional.empty());
         when(orderCodeGenerator.generate()).thenReturn(123456789L);
         when(paymentRepository.existsByOrderCode(123456789L)).thenReturn(false);
         when(payosGateway.createPaymentLink(any(PayosCreatePaymentLinkRequest.class)))
@@ -107,6 +119,8 @@ class PaymentServiceTest {
         ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(paymentCaptor.capture());
         assertThat(paymentCaptor.getValue().getProvider()).isEqualTo(PaymentProvider.PAYOS);
+        assertThat(paymentCaptor.getValue().getMethod()).isEqualTo(PaymentMethod.PAYOS);
+        assertThat(paymentCaptor.getValue().getOwnerId()).isEqualTo("owner-1");
         assertThat(paymentCaptor.getValue().getQrCode()).isEqualTo("qr-code");
 
         ArgumentCaptor<PayosCreatePaymentLinkRequest> requestCaptor =
@@ -122,8 +136,8 @@ class PaymentServiceTest {
         Payment pendingPayment = payment(PaymentStatus.PENDING);
         pendingPayment.setCheckoutUrl("https://pay.payos.vn/existing");
 
-        when(invoiceRepository.findById("invoice-1")).thenReturn(Optional.of(invoice(InvoiceStatus.UNPAID)));
-        when(paymentRepository.findFirstByInvoiceIdAndStatus("invoice-1", PaymentStatus.PENDING))
+        when(invoiceRepository.findByIdAndOwnerId("invoice-1", "owner-1")).thenReturn(Optional.of(invoice(InvoiceStatus.UNPAID)));
+        when(paymentRepository.findFirstByInvoiceIdAndOwnerIdAndStatus("invoice-1", "owner-1", PaymentStatus.PENDING))
                 .thenReturn(Optional.of(pendingPayment));
 
         PaymentLinkResponse response = paymentService.createPaymentLink("invoice-1");
@@ -136,7 +150,7 @@ class PaymentServiceTest {
 
     @Test
     void createPaymentLinkRejectsPaidInvoice() {
-        when(invoiceRepository.findById("invoice-1")).thenReturn(Optional.of(invoice(InvoiceStatus.PAID)));
+        when(invoiceRepository.findByIdAndOwnerId("invoice-1", "owner-1")).thenReturn(Optional.of(invoice(InvoiceStatus.PAID)));
 
         assertThatThrownBy(() -> paymentService.createPaymentLink("invoice-1"))
                 .isInstanceOf(BadRequestException.class)
@@ -150,7 +164,7 @@ class PaymentServiceTest {
         PayosWebhookRequest request = validWebhookRequest(123456789L, 3_035_000L);
 
         when(paymentRepository.findByOrderCode(123456789L)).thenReturn(Optional.of(payment));
-        when(invoiceRepository.findById("invoice-1")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdAndOwnerId("invoice-1", "owner-1")).thenReturn(Optional.of(invoice));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Payment result = paymentService.handlePayosWebhook(request);
@@ -191,7 +205,7 @@ class PaymentServiceTest {
         request.setSignature(payosSignatureService.createWebhookDataSignature(request.getData()));
 
         when(paymentRepository.findByOrderCode(123456789L)).thenReturn(Optional.of(payment));
-        when(invoiceRepository.findById("invoice-1")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdAndOwnerId("invoice-1", "owner-1")).thenReturn(Optional.of(invoice));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Payment result = paymentService.handlePayosWebhook(request);
@@ -211,7 +225,7 @@ class PaymentServiceTest {
         Payment result = paymentService.handlePayosWebhook(request);
 
         assertThat(result).isSameAs(paidPayment);
-        verify(invoiceRepository, never()).findById(any());
+        verify(invoiceRepository, never()).findByIdAndOwnerId(any(), any());
         verify(invoiceRepository, never()).save(any());
         verify(paymentRepository, never()).save(any());
     }
@@ -219,6 +233,7 @@ class PaymentServiceTest {
     private Invoice invoice(InvoiceStatus status) {
         return Invoice.builder()
                 .id("invoice-1")
+                .ownerId("owner-1")
                 .totalAmount(3_035_000L)
                 .status(status)
                 .build();
@@ -227,8 +242,10 @@ class PaymentServiceTest {
     private Payment payment(PaymentStatus status) {
         return Payment.builder()
                 .id("payment-1")
+                .ownerId("owner-1")
                 .invoiceId("invoice-1")
                 .provider(PaymentProvider.PAYOS)
+                .method(PaymentMethod.PAYOS)
                 .orderCode(123456789L)
                 .amount(3_035_000L)
                 .status(status)

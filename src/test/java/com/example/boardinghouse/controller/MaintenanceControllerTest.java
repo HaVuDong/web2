@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.MaintenanceRequest;
 import com.example.boardinghouse.domain.enums.MaintenancePriority;
 import com.example.boardinghouse.domain.enums.MaintenanceStatus;
@@ -34,6 +35,9 @@ class MaintenanceControllerTest {
 
     @MockBean
     private MaintenanceService maintenanceService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -119,3 +123,4 @@ class MaintenanceControllerTest {
                 .build();
     }
 }
+

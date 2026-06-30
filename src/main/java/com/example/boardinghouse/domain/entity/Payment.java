@@ -1,6 +1,7 @@
 package com.example.boardinghouse.domain.entity;
 
 import com.example.boardinghouse.domain.enums.PaymentProvider;
+import com.example.boardinghouse.domain.enums.PaymentMethod;
 import com.example.boardinghouse.domain.enums.PaymentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,11 +29,17 @@ public class Payment {
     private String id;
 
     @Indexed
+    private String ownerId;
+
+    @Indexed
     private String invoiceId;
 
     private PaymentProvider provider;
 
-    @Indexed(unique = true)
+    @Builder.Default
+    private PaymentMethod method = PaymentMethod.PAYOS;
+
+    @Indexed(unique = true, sparse = true)
     private Long orderCode;
 
     private Long amount;
@@ -45,6 +52,12 @@ public class Payment {
     private String qrCode;
 
     private String payosTransactionId;
+
+    private String providerTransactionId;
+
+    private String note;
+
+    private String createdBy;
 
     private LocalDateTime paidAt;
 

@@ -7,8 +7,10 @@ import com.example.boardinghouse.config.PayosProperties;
 import com.example.boardinghouse.domain.entity.Invoice;
 import com.example.boardinghouse.domain.entity.Payment;
 import com.example.boardinghouse.domain.enums.InvoiceStatus;
+import com.example.boardinghouse.domain.enums.PaymentMethod;
 import com.example.boardinghouse.domain.enums.PaymentProvider;
 import com.example.boardinghouse.domain.enums.PaymentStatus;
+import com.example.boardinghouse.dto.payment.ManualPaymentRequest;
 import com.example.boardinghouse.dto.payment.PaymentLinkResponse;
 import com.example.boardinghouse.dto.payment.PayosCreatePaymentLinkRequest;
 import com.example.boardinghouse.dto.payment.PayosCreatePaymentLinkResponse;
@@ -16,6 +18,7 @@ import com.example.boardinghouse.dto.payment.PayosWebhookRequest;
 import com.example.boardinghouse.repository.InvoiceRepository;
 import com.example.boardinghouse.repository.PaymentRepository;
 import com.example.boardinghouse.realtime.RealtimeEventPublisher;
+import com.example.boardinghouse.security.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -39,6 +42,8 @@ public class PaymentService {
     private final PayosProperties payosProperties;
     private final OrderCodeGenerator orderCodeGenerator;
     private final RealtimeEventPublisher realtimeEventPublisher;
+    private final CurrentUserService currentUserService;
+    private final AuditService auditService;
 
     /**
      * Tạo một link thanh toán (QR code/Checkout URL) cho một hóa đơn.
@@ -49,7 +54,8 @@ public class PaymentService {
      * @return Thông tin link thanh toán
      */
     public PaymentLinkResponse createPaymentLink(String invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        String ownerId = currentUserService.getOwnerId();
+        Invoice invoice = invoiceRepository.findByIdAndOwnerId(invoiceId, ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + invoiceId));
 
         if (invoice.getStatus() == InvoiceStatus.PAID) {
@@ -60,7 +66,7 @@ public class PaymentService {
             throw new BadRequestException("Cancelled invoice cannot create payment");
         }
 
-        return paymentRepository.findFirstByInvoiceIdAndStatus(invoiceId, PaymentStatus.PENDING)
+        return paymentRepository.findFirstByInvoiceIdAndOwnerIdAndStatus(invoiceId, ownerId, PaymentStatus.PENDING)
                 .map(PaymentLinkResponse::from)
                 .orElseGet(() -> createNewPaymentLink(invoiceId, invoice));
     }
@@ -90,8 +96,10 @@ public class PaymentService {
         PayosCreatePaymentLinkResponse payosResponse = payosGateway.createPaymentLink(payosRequest);
 
         Payment payment = Payment.builder()
+                .ownerId(invoice.getOwnerId())
                 .invoiceId(invoiceId)
                 .provider(PaymentProvider.PAYOS)
+                .method(PaymentMethod.PAYOS)
                 .orderCode(orderCode)
                 .amount(amount)
                 .status(PaymentStatus.PENDING)
@@ -99,7 +107,9 @@ public class PaymentService {
                 .qrCode(payosResponse.getQrCode())
                 .build();
 
-        return PaymentLinkResponse.from(paymentRepository.save(payment));
+        Payment saved = paymentRepository.save(payment);
+        auditService.log("CREATE", "PAYMENT", saved.getId(), null, saved);
+        return PaymentLinkResponse.from(saved);
     }
 
     /**
@@ -121,7 +131,7 @@ public class PaymentService {
         Payment payment = paymentRepository.findByOrderCode(orderCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with orderCode: " + orderCode));
 
-        if (payment.getStatus() == PaymentStatus.PAID) {
+        if (payment.getStatus() == PaymentStatus.PAID || payment.getStatus() == PaymentStatus.CANCELLED) {
             return payment;
         }
 
@@ -137,12 +147,13 @@ public class PaymentService {
             invoiceStatus = markPaymentAndInvoicePaid(payment, request).getStatus();
         } else {
             payment.setStatus(resolveNonSuccessStatus(request));
-            invoiceStatus = invoiceRepository.findById(payment.getInvoiceId())
+            invoiceStatus = invoiceRepository.findByIdAndOwnerId(payment.getInvoiceId(), payment.getOwnerId())
                     .map(Invoice::getStatus)
                     .orElse(null);
         }
 
         Payment savedPayment = paymentRepository.save(payment);
+        auditService.logWebhook("PAYMENT", savedPayment.getId(), null, savedPayment);
         realtimeEventPublisher.publishPaymentUpdated(savedPayment, invoiceStatus);
         return savedPayment;
     }
@@ -151,7 +162,7 @@ public class PaymentService {
      * Lấy thông tin thanh toán theo ID.
      */
     public Payment getPaymentById(String id) {
-        return paymentRepository.findById(id)
+        return paymentRepository.findByIdAndOwnerId(id, currentUserService.getOwnerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + id));
     }
 
@@ -159,11 +170,20 @@ public class PaymentService {
      * Lấy lịch sử các lần tạo thanh toán của một hóa đơn.
      */
     public List<Payment> getPaymentsByInvoiceId(String invoiceId) {
-        if (!invoiceRepository.existsById(invoiceId)) {
+        String ownerId = currentUserService.getOwnerId();
+        if (invoiceRepository.findByIdAndOwnerId(invoiceId, ownerId).isEmpty()) {
             throw new ResourceNotFoundException("Invoice not found with id: " + invoiceId);
         }
 
-        return paymentRepository.findByInvoiceId(invoiceId);
+        return paymentRepository.findByInvoiceIdAndOwnerId(invoiceId, ownerId);
+    }
+
+    public Payment recordCashPayment(String invoiceId, ManualPaymentRequest request) {
+        return recordManualPayment(invoiceId, PaymentMethod.CASH, request);
+    }
+
+    public Payment recordBankTransferPayment(String invoiceId, ManualPaymentRequest request) {
+        return recordManualPayment(invoiceId, PaymentMethod.BANK_TRANSFER, request);
     }
 
     /**
@@ -174,8 +194,9 @@ public class PaymentService {
         payment.setStatus(PaymentStatus.PAID);
         payment.setPaidAt(paidAt);
         payment.setPayosTransactionId(asString(request.getData().get("reference")));
+        payment.setProviderTransactionId(payment.getPayosTransactionId());
 
-        Invoice invoice = invoiceRepository.findById(payment.getInvoiceId())
+        Invoice invoice = invoiceRepository.findByIdAndOwnerId(payment.getInvoiceId(), payment.getOwnerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + payment.getInvoiceId()));
         if (invoice.getStatus() != InvoiceStatus.PAID) {
             invoice.setStatus(InvoiceStatus.PAID);
@@ -183,6 +204,52 @@ public class PaymentService {
             invoiceRepository.save(invoice);
         }
         return invoice;
+    }
+
+    private Payment recordManualPayment(String invoiceId, PaymentMethod method, ManualPaymentRequest request) {
+        String ownerId = currentUserService.getOwnerId();
+        Invoice invoice = invoiceRepository.findByIdAndOwnerId(invoiceId, ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + invoiceId));
+        if (invoice.getStatus() == InvoiceStatus.PAID) {
+            throw new BadRequestException("Paid invoice cannot be paid again");
+        }
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new BadRequestException("Cancelled invoice cannot be paid");
+        }
+
+        Long amount = request == null || request.getAmount() == null ? invoice.getTotalAmount() : request.getAmount();
+        if (amount == null || amount <= 0) {
+            throw new BadRequestException("Payment amount must be greater than 0");
+        }
+        if (!amount.equals(invoice.getTotalAmount())) {
+            throw new BadRequestException("Payment amount must equal invoice total amount");
+        }
+
+        LocalDateTime paidAt = LocalDateTime.now();
+        Payment payment = Payment.builder()
+                .ownerId(ownerId)
+                .invoiceId(invoiceId)
+                .provider(null)
+                .method(method)
+                .amount(amount)
+                .status(PaymentStatus.PAID)
+                .note(request == null ? null : request.getNote())
+                .createdBy(ownerId)
+                .paidAt(paidAt)
+                .build();
+
+        // Hủy bỏ tất cả payment PENDING (PayOS) đang tồn tại cho hóa đơn này
+        // để tránh data không nhất quán khi thanh toán bằng tiền mặt/chuyển khoản
+        cancelPendingPayments(invoiceId, ownerId);
+
+        invoice.setStatus(InvoiceStatus.PAID);
+        invoice.setPaidAt(paidAt);
+        invoiceRepository.save(invoice);
+
+        Payment savedPayment = paymentRepository.save(payment);
+        auditService.log("PAY", "PAYMENT", savedPayment.getId(), null, savedPayment);
+        realtimeEventPublisher.publishPaymentUpdated(savedPayment, InvoiceStatus.PAID);
+        return savedPayment;
     }
 
     /**
@@ -268,6 +335,18 @@ public class PaymentService {
      */
     private String asString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+    /**
+     * Hủy bỏ tất cả payment đang PENDING của một hóa đơn.
+     * Dùng khi thanh toán thủ công hoặc khi hóa đơn bị hủy để tránh payment cũ bị "treo".
+     */
+    public void cancelPendingPayments(String invoiceId, String ownerId) {
+        List<Payment> pendingPayments = paymentRepository.findByInvoiceIdAndOwnerIdAndStatus(
+                invoiceId, ownerId, PaymentStatus.PENDING);
+        pendingPayments.forEach(p -> {
+            p.setStatus(PaymentStatus.CANCELLED);
+            paymentRepository.save(p);
+        });
     }
 
 }

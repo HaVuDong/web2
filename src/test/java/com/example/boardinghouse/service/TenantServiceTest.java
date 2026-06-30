@@ -7,6 +7,8 @@ import com.example.boardinghouse.domain.enums.TenantStatus;
 import com.example.boardinghouse.dto.tenant.CreateTenantRequest;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
+import com.example.boardinghouse.security.CurrentUserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -26,6 +28,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class TenantServiceTest {
@@ -39,8 +42,16 @@ class TenantServiceTest {
     @Mock
     private MongoTemplate mongoTemplate;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
     @InjectMocks
     private TenantService tenantService;
+
+    @BeforeEach
+    void setUpOwner() {
+        lenient().when(currentUserService.getOwnerId()).thenReturn("owner-1");
+    }
 
     @Test
     void createTenantCreatesActiveTenantByDefault() {
@@ -49,6 +60,7 @@ class TenantServiceTest {
 
         Tenant tenant = tenantService.createTenant(request);
 
+        assertThat(tenant.getOwnerId()).isEqualTo("owner-1");
         assertThat(tenant.getFullName()).isEqualTo("Nguyen Van A");
         assertThat(tenant.getStatus()).isEqualTo(TenantStatus.ACTIVE);
         assertThat(tenant.getCurrentRoomId()).isNull();
@@ -59,7 +71,7 @@ class TenantServiceTest {
         CreateTenantRequest request = createTenantRequest();
         request.setCurrentRoomId("missing-room");
 
-        when(roomRepository.existsById("missing-room")).thenReturn(false);
+        when(roomRepository.findByIdAndOwnerId("missing-room", "owner-1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> tenantService.createTenant(request))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -81,7 +93,7 @@ class TenantServiceTest {
 
     @Test
     void getTenantsByRoomIdRejectsMissingRoom() {
-        when(roomRepository.existsById("missing-room")).thenReturn(false);
+        when(roomRepository.findByIdAndOwnerId("missing-room", "owner-1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> tenantService.getTenantsByRoomId("missing-room"))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -91,7 +103,7 @@ class TenantServiceTest {
     @Test
     void markTenantLeftRejectsActiveContract() {
         Tenant tenant = tenant("tenant-1", TenantStatus.ACTIVE, "room-1");
-        when(tenantRepository.findById("tenant-1")).thenReturn(Optional.of(tenant));
+        when(tenantRepository.findByIdAndOwnerId("tenant-1", "owner-1")).thenReturn(Optional.of(tenant));
         when(mongoTemplate.count(any(Query.class), eq("contracts"))).thenReturn(1L);
 
         assertThatThrownBy(() -> tenantService.markTenantLeft("tenant-1"))
@@ -104,7 +116,7 @@ class TenantServiceTest {
     @Test
     void markTenantLeftClearsRoomWhenNoActiveContractExists() {
         Tenant tenant = tenant("tenant-1", TenantStatus.ACTIVE, "room-1");
-        when(tenantRepository.findById("tenant-1")).thenReturn(Optional.of(tenant));
+        when(tenantRepository.findByIdAndOwnerId("tenant-1", "owner-1")).thenReturn(Optional.of(tenant));
         when(mongoTemplate.count(any(Query.class), eq("contracts"))).thenReturn(0L);
 
         tenantService.markTenantLeft("tenant-1");
@@ -129,6 +141,7 @@ class TenantServiceTest {
     private Tenant tenant(String id, TenantStatus status, String currentRoomId) {
         return Tenant.builder()
                 .id(id)
+                .ownerId("owner-1")
                 .fullName("Nguyen Van A")
                 .phone("0909123456")
                 .email("tenant@gmail.com")

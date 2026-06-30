@@ -11,6 +11,8 @@ import com.example.boardinghouse.dto.dashboard.DashboardSummaryResponse;
 import com.example.boardinghouse.repository.InvoiceRepository;
 import com.example.boardinghouse.repository.MaintenanceRepository;
 import com.example.boardinghouse.repository.RoomRepository;
+import com.example.boardinghouse.security.CurrentUserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -23,6 +25,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceTest {
@@ -36,29 +39,37 @@ class DashboardServiceTest {
     @Mock
     private MaintenanceRepository maintenanceRepository;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
     @InjectMocks
     private DashboardService dashboardService;
+
+    @BeforeEach
+    void setUpOwner() {
+        lenient().when(currentUserService.getOwnerId()).thenReturn("owner-1");
+    }
 
     @Test
     void getSummaryCalculatesRoomsRevenueDebtsAndMaintenance() {
         LocalDate today = LocalDate.now();
-        when(roomRepository.count()).thenReturn(20L);
-        when(roomRepository.countByStatus(RoomStatus.AVAILABLE)).thenReturn(4L);
-        when(roomRepository.countByStatus(RoomStatus.OCCUPIED)).thenReturn(15L);
-        when(roomRepository.countByStatus(RoomStatus.RESERVED)).thenReturn(0L);
-        when(roomRepository.countByStatus(RoomStatus.MAINTENANCE)).thenReturn(1L);
-        when(invoiceRepository.findByMonthAndYear(today.getMonthValue(), today.getYear()))
+        when(roomRepository.countByOwnerId("owner-1")).thenReturn(20L);
+        when(roomRepository.countByOwnerIdAndStatus("owner-1", RoomStatus.AVAILABLE)).thenReturn(4L);
+        when(roomRepository.countByOwnerIdAndStatus("owner-1", RoomStatus.OCCUPIED)).thenReturn(15L);
+        when(roomRepository.countByOwnerIdAndStatus("owner-1", RoomStatus.RESERVED)).thenReturn(0L);
+        when(roomRepository.countByOwnerIdAndStatus("owner-1", RoomStatus.MAINTENANCE)).thenReturn(1L);
+        when(invoiceRepository.findByOwnerIdAndMonthAndYear("owner-1", today.getMonthValue(), today.getYear()))
                 .thenReturn(List.of(
                         invoice("invoice-1", InvoiceStatus.PAID, 100L),
                         invoice("invoice-2", InvoiceStatus.UNPAID, 200L),
                         invoice("invoice-3", InvoiceStatus.CANCELLED, 50L)
                 ));
-        when(invoiceRepository.findByStatus(InvoiceStatus.UNPAID))
+        when(invoiceRepository.findByOwnerIdAndStatus("owner-1", InvoiceStatus.UNPAID))
                 .thenReturn(List.of(invoice("invoice-4", InvoiceStatus.UNPAID, 300L)));
-        when(invoiceRepository.findByStatus(InvoiceStatus.PARTIAL)).thenReturn(List.of());
-        when(invoiceRepository.findByStatus(InvoiceStatus.OVERDUE))
+        when(invoiceRepository.findByOwnerIdAndStatus("owner-1", InvoiceStatus.PARTIAL)).thenReturn(List.of());
+        when(invoiceRepository.findByOwnerIdAndStatus("owner-1", InvoiceStatus.OVERDUE))
                 .thenReturn(List.of(invoice("invoice-5", InvoiceStatus.OVERDUE, 400L)));
-        when(maintenanceRepository.countByStatus(MaintenanceStatus.PENDING)).thenReturn(2L);
+        when(maintenanceRepository.countByOwnerIdAndStatus("owner-1", MaintenanceStatus.PENDING)).thenReturn(2L);
 
         DashboardSummaryResponse response = dashboardService.getSummary();
 
@@ -75,7 +86,7 @@ class DashboardServiceTest {
 
     @Test
     void getRevenueCalculatesPaidAndUnpaidRevenue() {
-        when(invoiceRepository.findByMonthAndYear(6, 2026))
+        when(invoiceRepository.findByOwnerIdAndMonthAndYear("owner-1", 6, 2026))
                 .thenReturn(List.of(
                         invoice("invoice-1", InvoiceStatus.PAID, 100L),
                         invoice("invoice-2", InvoiceStatus.UNPAID, 200L),
@@ -97,7 +108,7 @@ class DashboardServiceTest {
 
     @Test
     void getDebtsReturnsOnlyDebtInvoices() {
-        when(invoiceRepository.findAll()).thenReturn(List.of(
+        when(invoiceRepository.findByOwnerId("owner-1")).thenReturn(List.of(
                 invoice("invoice-1", InvoiceStatus.PAID, 100L),
                 invoice("invoice-2", InvoiceStatus.UNPAID, 200L),
                 invoice("invoice-3", InvoiceStatus.PARTIAL, 50L),

@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.domain.entity.User;
 import com.example.boardinghouse.domain.enums.UserRole;
 import com.example.boardinghouse.dto.auth.LoginRequest;
@@ -36,6 +37,9 @@ public class AuthControllerTest {
     private AuthenticationManager authenticationManager;
 
     @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
+
+    @MockBean
     private JwtUtils jwtUtils;
 
     @MockBean
@@ -67,3 +71,4 @@ public class AuthControllerTest {
                 .andExpect(jsonPath("$.data.email").value("owner@gmail.com"));
     }
 }
+

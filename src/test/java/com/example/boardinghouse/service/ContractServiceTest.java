@@ -14,6 +14,8 @@ import com.example.boardinghouse.dto.contract.UpdateContractRequest;
 import com.example.boardinghouse.repository.ContractRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
+import com.example.boardinghouse.security.CurrentUserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ContractServiceTest {
@@ -43,8 +46,19 @@ class ContractServiceTest {
     @Mock
     private TenantRepository tenantRepository;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
+    @Mock
+    private AuditService auditService;
+
     @InjectMocks
     private ContractService contractService;
+
+    @BeforeEach
+    void setUpOwner() {
+        lenient().when(currentUserService.getOwnerId()).thenReturn("owner-1");
+    }
 
     @Test
     void createContractUpdatesRoomAndTenantState() {
@@ -52,13 +66,15 @@ class ContractServiceTest {
         Tenant tenant = tenant();
         CreateContractRequest request = createContractRequest();
 
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
-        when(tenantRepository.findAllById(List.of("tenant-1"))).thenReturn(List.of(tenant));
-        when(contractRepository.findByRoomIdAndStatus("room-1", ContractStatus.ACTIVE)).thenReturn(Optional.empty());
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.of(room));
+        when(tenantRepository.findByIdAndOwnerId("tenant-1", "owner-1")).thenReturn(Optional.of(tenant));
+        when(contractRepository.findByRoomIdAndOwnerIdAndStatus("room-1", "owner-1", ContractStatus.ACTIVE)).thenReturn(Optional.empty());
+        when(contractRepository.findByOwnerId("owner-1")).thenReturn(List.of());
         when(contractRepository.save(any(Contract.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Contract contract = contractService.createContract(request);
 
+        assertThat(contract.getOwnerId()).isEqualTo("owner-1");
         assertThat(contract.getStatus()).isEqualTo(ContractStatus.ACTIVE);
         assertThat(contract.getRoomId()).isEqualTo("room-1");
         assertThat(room.getStatus()).isEqualTo(RoomStatus.OCCUPIED);
@@ -75,13 +91,14 @@ class ContractServiceTest {
         CreateContractRequest request = createContractRequest();
         Contract existingContract = Contract.builder()
                 .id("contract-1")
+                .ownerId("owner-1")
                 .roomId("room-1")
                 .status(ContractStatus.ACTIVE)
                 .build();
 
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
-        when(tenantRepository.findAllById(List.of("tenant-1"))).thenReturn(List.of(tenant));
-        when(contractRepository.findByRoomIdAndStatus("room-1", ContractStatus.ACTIVE))
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.of(room));
+        when(tenantRepository.findByIdAndOwnerId("tenant-1", "owner-1")).thenReturn(Optional.of(tenant));
+        when(contractRepository.findByRoomIdAndOwnerIdAndStatus("room-1", "owner-1", ContractStatus.ACTIVE))
                 .thenReturn(Optional.of(existingContract));
 
         assertThatThrownBy(() -> contractService.createContract(request))
@@ -97,20 +114,22 @@ class ContractServiceTest {
         Contract contract = activeContract();
         Room room = Room.builder()
                 .id("room-1")
+                .ownerId("owner-1")
                 .status(RoomStatus.OCCUPIED)
                 .build();
         Tenant tenant = Tenant.builder()
                 .id("tenant-1")
+                .ownerId("owner-1")
                 .currentRoomId("room-1")
                 .status(TenantStatus.ACTIVE)
                 .build();
         TerminateContractRequest request = new TerminateContractRequest();
         request.setRoomStatus(RoomStatus.MAINTENANCE);
 
-        when(contractRepository.findById("contract-1")).thenReturn(Optional.of(contract));
+        when(contractRepository.findByIdAndOwnerId("contract-1", "owner-1")).thenReturn(Optional.of(contract));
         when(contractRepository.save(any(Contract.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
-        when(tenantRepository.findAllById(List.of("tenant-1"))).thenReturn(List.of(tenant));
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.of(room));
+        when(tenantRepository.findByIdAndOwnerId("tenant-1", "owner-1")).thenReturn(Optional.of(tenant));
 
         Contract terminatedContract = contractService.terminateContract("contract-1", request);
 
@@ -126,7 +145,7 @@ class ContractServiceTest {
         Contract contract = activeContract();
         contract.setStatus(ContractStatus.TERMINATED);
 
-        when(contractRepository.findById("contract-1")).thenReturn(Optional.of(contract));
+        when(contractRepository.findByIdAndOwnerId("contract-1", "owner-1")).thenReturn(Optional.of(contract));
 
         assertThatThrownBy(() -> contractService.terminateContract("contract-1", null))
                 .isInstanceOf(BadRequestException.class)
@@ -140,7 +159,7 @@ class ContractServiceTest {
         request.setNewEndDate(LocalDate.of(2028, 6, 1));
         request.setMonthlyRent(3_000_000L);
 
-        when(contractRepository.findById("contract-1")).thenReturn(Optional.of(contract));
+        when(contractRepository.findByIdAndOwnerId("contract-1", "owner-1")).thenReturn(Optional.of(contract));
         when(contractRepository.save(any(Contract.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Contract renewedContract = contractService.renewContract("contract-1", request);
@@ -158,7 +177,7 @@ class ContractServiceTest {
         request.setDeposit(2_500_000L);
         request.setPaymentDueDay(5);
 
-        when(contractRepository.findById("contract-1")).thenReturn(Optional.of(activeContract()));
+        when(contractRepository.findByIdAndOwnerId("contract-1", "owner-1")).thenReturn(Optional.of(activeContract()));
 
         assertThatThrownBy(() -> contractService.updateContract("contract-1", request))
                 .isInstanceOf(BadRequestException.class)
@@ -180,6 +199,7 @@ class ContractServiceTest {
     private Contract activeContract() {
         return Contract.builder()
                 .id("contract-1")
+                .ownerId("owner-1")
                 .roomId("room-1")
                 .tenantIds(List.of("tenant-1"))
                 .startDate(LocalDate.of(2026, 6, 1))
@@ -194,6 +214,8 @@ class ContractServiceTest {
     private Room room() {
         return Room.builder()
                 .id("room-1")
+                .ownerId("owner-1")
+                .maxTenants(2)
                 .status(RoomStatus.AVAILABLE)
                 .build();
     }
@@ -201,6 +223,7 @@ class ContractServiceTest {
     private Tenant tenant() {
         return Tenant.builder()
                 .id("tenant-1")
+                .ownerId("owner-1")
                 .status(TenantStatus.LEFT)
                 .build();
     }

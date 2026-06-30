@@ -1,5 +1,6 @@
 package com.example.boardinghouse.controller;
 
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.dto.dashboard.DashboardDebtsResponse;
 import com.example.boardinghouse.dto.dashboard.DashboardRevenueResponse;
 import com.example.boardinghouse.dto.dashboard.DashboardRoomsStatusResponse;
@@ -31,6 +32,9 @@ class DashboardControllerTest {
 
     @MockBean
     private DashboardService dashboardService;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
@@ -114,3 +118,4 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.data.maintenanceRooms").value(1L));
     }
 }
+

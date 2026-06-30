@@ -12,6 +12,7 @@ import com.example.boardinghouse.dto.dashboard.DashboardSummaryResponse;
 import com.example.boardinghouse.repository.InvoiceRepository;
 import com.example.boardinghouse.repository.MaintenanceRepository;
 import com.example.boardinghouse.repository.RoomRepository;
+import com.example.boardinghouse.security.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +34,7 @@ public class DashboardService {
     private final RoomRepository roomRepository;
     private final InvoiceRepository invoiceRepository;
     private final MaintenanceRepository maintenanceRepository;
+    private final CurrentUserService currentUserService;
 
     /**
      * Lấy dữ liệu tổng quan cho trang chủ (Dashboard).
@@ -44,8 +46,9 @@ public class DashboardService {
      */
     public DashboardSummaryResponse getSummary() {
         LocalDate today = LocalDate.now();
-        MonthlyRevenue monthlyRevenue = calculateMonthlyRevenue(today.getMonthValue(), today.getYear());
-        DashboardRoomsStatusResponse roomsStatus = getRoomsStatus();
+        String ownerId = currentUserService.getOwnerId();
+        MonthlyRevenue monthlyRevenue = calculateMonthlyRevenue(ownerId, today.getMonthValue(), today.getYear());
+        DashboardRoomsStatusResponse roomsStatus = getRoomsStatus(ownerId);
 
         return DashboardSummaryResponse.builder()
                 .totalRooms(roomsStatus.getTotalRooms())
@@ -70,7 +73,7 @@ public class DashboardService {
      */
     public DashboardRevenueResponse getRevenue(Integer month, Integer year) {
         Period period = resolvePeriod(month, year);
-        MonthlyRevenue revenue = calculateMonthlyRevenue(period.month(), period.year());
+        MonthlyRevenue revenue = calculateMonthlyRevenue(currentUserService.getOwnerId(), period.month(), period.year());
 
         return DashboardRevenueResponse.builder()
                 .month(period.month())
@@ -90,7 +93,8 @@ public class DashboardService {
      * @return Tổng số tiền nợ và danh sách hóa đơn nợ
      */
     public DashboardDebtsResponse getDebts() {
-        List<Invoice> debtInvoices = invoiceRepository.findAll().stream()
+        String ownerId = currentUserService.getOwnerId();
+        List<Invoice> debtInvoices = invoiceRepository.findByOwnerId(ownerId).stream()
                 .filter(invoice -> DEBT_STATUSES.contains(invoice.getStatus()))
                 .toList();
         Long totalDebt = debtInvoices.stream()
@@ -111,12 +115,16 @@ public class DashboardService {
      * @return Thống kê trạng thái phòng
      */
     public DashboardRoomsStatusResponse getRoomsStatus() {
+        return getRoomsStatus(currentUserService.getOwnerId());
+    }
+
+    private DashboardRoomsStatusResponse getRoomsStatus(String ownerId) {
         return DashboardRoomsStatusResponse.builder()
-                .totalRooms(roomRepository.count())
-                .availableRooms(roomRepository.countByStatus(RoomStatus.AVAILABLE))
-                .occupiedRooms(roomRepository.countByStatus(RoomStatus.OCCUPIED))
-                .reservedRooms(roomRepository.countByStatus(RoomStatus.RESERVED))
-                .maintenanceRooms(roomRepository.countByStatus(RoomStatus.MAINTENANCE))
+                .totalRooms(roomRepository.countByOwnerId(ownerId))
+                .availableRooms(roomRepository.countByOwnerIdAndStatus(ownerId, RoomStatus.AVAILABLE))
+                .occupiedRooms(roomRepository.countByOwnerIdAndStatus(ownerId, RoomStatus.OCCUPIED))
+                .reservedRooms(roomRepository.countByOwnerIdAndStatus(ownerId, RoomStatus.RESERVED))
+                .maintenanceRooms(roomRepository.countByOwnerIdAndStatus(ownerId, RoomStatus.MAINTENANCE))
                 .build();
     }
 
@@ -127,8 +135,8 @@ public class DashboardService {
      * @param year Năm
      * @return Dữ liệu doanh thu hàng tháng (MonthlyRevenue)
      */
-    private MonthlyRevenue calculateMonthlyRevenue(Integer month, Integer year) {
-        List<Invoice> invoices = invoiceRepository.findByMonthAndYear(month, year).stream()
+    private MonthlyRevenue calculateMonthlyRevenue(String ownerId, Integer month, Integer year) {
+        List<Invoice> invoices = invoiceRepository.findByOwnerIdAndMonthAndYear(ownerId, month, year).stream()
                 .filter(invoice -> invoice.getStatus() != InvoiceStatus.CANCELLED)
                 .toList();
 
@@ -164,8 +172,9 @@ public class DashboardService {
      * Đếm tổng số lượng hóa đơn đang ở trạng thái nợ.
      */
     private long countDebtInvoices() {
+        String ownerId = currentUserService.getOwnerId();
         return DEBT_STATUSES.stream()
-                .mapToLong(status -> invoiceRepository.findByStatus(status).size())
+                .mapToLong(status -> invoiceRepository.findByOwnerIdAndStatus(ownerId, status).size())
                 .sum();
     }
 
@@ -173,7 +182,7 @@ public class DashboardService {
      * Đếm số lượng yêu cầu bảo trì đang ở trạng thái chờ xử lý (PENDING).
      */
     private long countPendingMaintenanceRequests() {
-        return maintenanceRepository.countByStatus(MaintenanceStatus.PENDING);
+        return maintenanceRepository.countByOwnerIdAndStatus(currentUserService.getOwnerId(), MaintenanceStatus.PENDING);
     }
 
     /**

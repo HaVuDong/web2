@@ -9,6 +9,8 @@ import com.example.boardinghouse.dto.maintenance.UpdateMaintenanceRequest;
 import com.example.boardinghouse.repository.MaintenanceRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
+import com.example.boardinghouse.security.CurrentUserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class MaintenanceServiceTest {
@@ -37,17 +40,29 @@ class MaintenanceServiceTest {
     @Mock
     private TenantRepository tenantRepository;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
+    @Mock
+    private AuditService auditService;
+
     @InjectMocks
     private MaintenanceService maintenanceService;
 
+    @BeforeEach
+    void setUpOwner() {
+        lenient().when(currentUserService.getOwnerId()).thenReturn("owner-1");
+    }
+
     @Test
     void createMaintenanceRequestCreatesPendingRequest() {
-        when(roomRepository.existsById("room-1")).thenReturn(true);
-        when(tenantRepository.existsById("tenant-1")).thenReturn(true);
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.of(new com.example.boardinghouse.domain.entity.Room()));
+        when(tenantRepository.findByIdAndOwnerId("tenant-1", "owner-1")).thenReturn(Optional.of(new com.example.boardinghouse.domain.entity.Tenant()));
         when(maintenanceRepository.save(any(MaintenanceRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         MaintenanceRequest maintenanceRequest = maintenanceService.createMaintenanceRequest(createRequest());
 
+        assertThat(maintenanceRequest.getOwnerId()).isEqualTo("owner-1");
         assertThat(maintenanceRequest.getRoomId()).isEqualTo("room-1");
         assertThat(maintenanceRequest.getTenantId()).isEqualTo("tenant-1");
         assertThat(maintenanceRequest.getTitle()).isEqualTo("Fix water leak");
@@ -58,7 +73,7 @@ class MaintenanceServiceTest {
 
     @Test
     void createMaintenanceRequestRejectsMissingRoom() {
-        when(roomRepository.existsById("room-1")).thenReturn(false);
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> maintenanceService.createMaintenanceRequest(createRequest()))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -68,7 +83,7 @@ class MaintenanceServiceTest {
     @Test
     void updateMaintenanceStatusDoneSetsCompletedAt() {
         MaintenanceRequest maintenanceRequest = maintenanceRequest(MaintenanceStatus.IN_PROGRESS);
-        when(maintenanceRepository.findById("maintenance-1")).thenReturn(Optional.of(maintenanceRequest));
+        when(maintenanceRepository.findByIdAndOwnerId("maintenance-1", "owner-1")).thenReturn(Optional.of(maintenanceRequest));
         when(maintenanceRepository.save(any(MaintenanceRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         MaintenanceRequest updated = maintenanceService.updateMaintenanceStatus("maintenance-1", MaintenanceStatus.DONE);
@@ -79,7 +94,7 @@ class MaintenanceServiceTest {
 
     @Test
     void getMaintenanceRequestsFiltersByStatus() {
-        when(maintenanceRepository.findByStatus(MaintenanceStatus.PENDING))
+        when(maintenanceRepository.findByOwnerIdAndStatus("owner-1", MaintenanceStatus.PENDING))
                 .thenReturn(List.of(maintenanceRequest(MaintenanceStatus.PENDING)));
 
         List<MaintenanceRequest> requests = maintenanceService.getMaintenanceRequests(MaintenanceStatus.PENDING);
@@ -97,8 +112,8 @@ class MaintenanceServiceTest {
         request.setDescription("Broken hallway light");
         request.setPriority(MaintenancePriority.MEDIUM);
 
-        when(maintenanceRepository.findById("maintenance-1")).thenReturn(Optional.of(maintenanceRequest));
-        when(tenantRepository.existsById("tenant-2")).thenReturn(true);
+        when(maintenanceRepository.findByIdAndOwnerId("maintenance-1", "owner-1")).thenReturn(Optional.of(maintenanceRequest));
+        when(tenantRepository.findByIdAndOwnerId("tenant-2", "owner-1")).thenReturn(Optional.of(new com.example.boardinghouse.domain.entity.Tenant()));
         when(maintenanceRepository.save(any(MaintenanceRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         MaintenanceRequest updated = maintenanceService.updateMaintenanceRequest("maintenance-1", request);
@@ -125,6 +140,7 @@ class MaintenanceServiceTest {
     private MaintenanceRequest maintenanceRequest(MaintenanceStatus status) {
         return MaintenanceRequest.builder()
                 .id("maintenance-1")
+                .ownerId("owner-1")
                 .roomId("room-1")
                 .tenantId("tenant-1")
                 .title("Fix water leak")

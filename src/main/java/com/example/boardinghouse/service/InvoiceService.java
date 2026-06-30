@@ -2,13 +2,16 @@ package com.example.boardinghouse.service;
 
 import com.example.boardinghouse.common.exception.BadRequestException;
 import com.example.boardinghouse.common.exception.ResourceNotFoundException;
+import com.example.boardinghouse.common.util.SoftDeleteHelper;
 import com.example.boardinghouse.domain.entity.Contract;
 import com.example.boardinghouse.domain.entity.Invoice;
 import com.example.boardinghouse.domain.entity.MeterReading;
+import com.example.boardinghouse.domain.entity.Payment;
 import com.example.boardinghouse.domain.entity.Room;
 import com.example.boardinghouse.domain.entity.ServicePrice;
 import com.example.boardinghouse.domain.enums.ContractStatus;
 import com.example.boardinghouse.domain.enums.InvoiceStatus;
+import com.example.boardinghouse.domain.enums.PaymentStatus;
 import com.example.boardinghouse.domain.enums.RoomStatus;
 import com.example.boardinghouse.dto.invoice.GenerateInvoiceRequest;
 import com.example.boardinghouse.dto.invoice.GenerateMonthlyInvoiceRequest;
@@ -17,9 +20,11 @@ import com.example.boardinghouse.dto.invoice.UpdateInvoiceRequest;
 import com.example.boardinghouse.repository.ContractRepository;
 import com.example.boardinghouse.repository.InvoiceRepository;
 import com.example.boardinghouse.repository.MeterReadingRepository;
+import com.example.boardinghouse.repository.PaymentRepository;
 import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.ServicePriceRepository;
+import com.example.boardinghouse.security.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +43,9 @@ public class InvoiceService {
     private final MeterReadingRepository meterReadingRepository;
     private final ServicePriceRepository servicePriceRepository;
     private final PropertyRepository propertyRepository;
+    private final PaymentRepository paymentRepository;
+    private final CurrentUserService currentUserService;
+    private final AuditService auditService;
 
     /**
      * Lấy danh sách toàn bộ hóa đơn.
@@ -45,7 +53,7 @@ public class InvoiceService {
      * @return Danh sách hóa đơn
      */
     public List<Invoice> getAllInvoices() {
-        return invoiceRepository.findAll();
+        return invoiceRepository.findByOwnerId(currentUserService.getOwnerId());
     }
 
     /**
@@ -73,7 +81,8 @@ public class InvoiceService {
      * @return Kết quả tổng hợp các hóa đơn tạo thành công và danh sách lỗi
      */
     public MonthlyInvoiceGenerationResponse generateMonthlyInvoices(GenerateMonthlyInvoiceRequest request) {
-        if (!propertyRepository.existsById(request.getPropertyId())) {
+        String ownerId = currentUserService.getOwnerId();
+        if (propertyRepository.findByIdAndOwnerId(request.getPropertyId(), ownerId).isEmpty()) {
             throw new ResourceNotFoundException("Property not found with id: " + request.getPropertyId());
         }
 
@@ -81,7 +90,7 @@ public class InvoiceService {
         List<String> skippedRooms = new ArrayList<>();
         List<String> errors = new ArrayList<>();
 
-        roomRepository.findByPropertyId(request.getPropertyId()).stream()
+        roomRepository.findByPropertyIdAndOwnerId(request.getPropertyId(), ownerId).stream()
                 .filter(room -> room.getStatus() == RoomStatus.OCCUPIED)
                 .forEach(room -> {
                     try {
@@ -104,7 +113,7 @@ public class InvoiceService {
      * Lấy thông tin hóa đơn theo ID. Ném ngoại lệ nếu không tìm thấy.
      */
     public Invoice getInvoiceById(String id) {
-        return invoiceRepository.findById(id)
+        return invoiceRepository.findByIdAndOwnerId(id, currentUserService.getOwnerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + id));
     }
 
@@ -127,13 +136,26 @@ public class InvoiceService {
             throw new BadRequestException("Cancelled invoice cannot be edited");
         }
 
+        Long oldTotalAmount = invoice.getTotalAmount();
+
         invoice.setOtherFees(request.getOtherFees() == null ? invoice.getOtherFees() : request.getOtherFees());
         invoice.setDiscountAmount(request.getDiscountAmount() == null ? invoice.getDiscountAmount() : request.getDiscountAmount());
         invoice.setDueDate(request.getDueDate() == null ? invoice.getDueDate() : request.getDueDate());
         invoice.setNote(request.getNote() == null ? invoice.getNote() : request.getNote());
-        invoice.setTotalAmount(calculateTotalAmount(invoice));
+        
+        Long newTotalAmount = calculateTotalAmount(invoice);
+        if (newTotalAmount < 0) {
+            throw new BadRequestException("Total amount cannot be negative");
+        }
+        invoice.setTotalAmount(newTotalAmount);
 
-        return invoiceRepository.save(invoice);
+        if (oldTotalAmount != null && !oldTotalAmount.equals(newTotalAmount)) {
+            cancelPendingPayments(invoice.getId(), invoice.getOwnerId());
+        }
+
+        Invoice saved = invoiceRepository.save(invoice);
+        auditService.log("UPDATE", "INVOICE", saved.getId(), null, saved);
+        return saved;
     }
 
     /**
@@ -145,7 +167,9 @@ public class InvoiceService {
             throw new BadRequestException("Paid invoice cannot be deleted");
         }
 
-        invoiceRepository.delete(invoice);
+        SoftDeleteHelper.markDeleted(invoice, currentUserService.getOwnerId());
+        invoiceRepository.save(invoice);
+        auditService.log("SOFT_DELETE", "INVOICE", invoice.getId(), null, invoice);
     }
 
     /**
@@ -154,13 +178,18 @@ public class InvoiceService {
      */
     public Invoice markPaid(String id) {
         Invoice invoice = getInvoiceById(id);
+        if (invoice.getStatus() == InvoiceStatus.PAID) {
+            throw new BadRequestException("Paid invoice cannot be marked as paid again");
+        }
         if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Cancelled invoice cannot be marked as paid");
         }
 
         invoice.setStatus(InvoiceStatus.PAID);
         invoice.setPaidAt(LocalDateTime.now());
-        return invoiceRepository.save(invoice);
+        Invoice saved = invoiceRepository.save(invoice);
+        auditService.log("PAY", "INVOICE", saved.getId(), null, saved);
+        return saved;
     }
 
     /**
@@ -173,18 +202,23 @@ public class InvoiceService {
         }
 
         invoice.setStatus(InvoiceStatus.CANCELLED);
-        return invoiceRepository.save(invoice);
+        cancelPendingPayments(invoice.getId(), invoice.getOwnerId());
+        
+        Invoice saved = invoiceRepository.save(invoice);
+        auditService.log("CANCEL", "INVOICE", saved.getId(), null, saved);
+        return saved;
     }
 
     /**
      * Lấy danh sách hóa đơn của một phòng cụ thể.
      */
     public List<Invoice> getInvoicesByRoomId(String roomId) {
-        if (!roomRepository.existsById(roomId)) {
+        String ownerId = currentUserService.getOwnerId();
+        if (roomRepository.findByIdAndOwnerId(roomId, ownerId).isEmpty()) {
             throw new ResourceNotFoundException("Room not found with id: " + roomId);
         }
 
-        return invoiceRepository.findByRoomId(roomId);
+        return invoiceRepository.findByRoomIdAndOwnerId(roomId, ownerId);
     }
 
     /**
@@ -193,16 +227,17 @@ public class InvoiceService {
      * Đảm bảo không tạo trùng hóa đơn trong cùng một tháng.
      */
     private Invoice createInvoice(String roomId, Integer month, Integer year, Long otherFees, Long discountAmount, String note) {
-        Room room = roomRepository.findById(roomId)
+        String ownerId = currentUserService.getOwnerId();
+        Room room = roomRepository.findByIdAndOwnerId(roomId, ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId));
-        Contract contract = contractRepository.findByRoomIdAndStatus(roomId, ContractStatus.ACTIVE)
+        Contract contract = contractRepository.findByRoomIdAndOwnerIdAndStatus(roomId, ownerId, ContractStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("Active contract not found for room id: " + roomId));
-        ServicePrice servicePrice = servicePriceRepository.findByPropertyId(room.getPropertyId())
+        ServicePrice servicePrice = servicePriceRepository.findByPropertyIdAndOwnerId(room.getPropertyId(), ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Service price not found for property id: " + room.getPropertyId()));
-        MeterReading meterReading = meterReadingRepository.findByRoomIdAndMonthAndYear(roomId, month, year)
+        MeterReading meterReading = meterReadingRepository.findByRoomIdAndOwnerIdAndMonthAndYear(roomId, ownerId, month, year)
                 .orElseThrow(() -> new ResourceNotFoundException("Meter reading not found for room and month"));
 
-        invoiceRepository.findByRoomIdAndMonthAndYear(roomId, month, year)
+        invoiceRepository.findByRoomIdAndOwnerIdAndMonthAndYear(roomId, ownerId, month, year)
                 .ifPresent(invoice -> {
                     throw new BadRequestException("Invoice already exists for this room and month");
                 });
@@ -213,6 +248,7 @@ public class InvoiceService {
         Long waterAmount = waterUsage * servicePrice.getWaterPrice();
 
         Invoice invoice = Invoice.builder()
+                .ownerId(ownerId)
                 .roomId(roomId)
                 .contractId(contract.getId())
                 .month(month)
@@ -237,9 +273,16 @@ public class InvoiceService {
                 .dueDate(resolveDueDate(month, year, contract.getPaymentDueDay()))
                 .note(note)
                 .build();
-        invoice.setTotalAmount(calculateTotalAmount(invoice));
+        
+        Long totalAmount = calculateTotalAmount(invoice);
+        if (totalAmount < 0) {
+            throw new BadRequestException("Total amount cannot be negative");
+        }
+        invoice.setTotalAmount(totalAmount);
 
-        return invoiceRepository.save(invoice);
+        Invoice saved = invoiceRepository.save(invoice);
+        auditService.log("CREATE", "INVOICE", saved.getId(), null, saved);
+        return saved;
     }
 
     /**
@@ -270,5 +313,18 @@ public class InvoiceService {
      */
     private Long valueOrZero(Long value) {
         return value == null ? 0L : value;
+    }
+
+    /**
+     * Hủy bỏ tất cả payment đang PENDING của một hóa đơn.
+     * Dùng khi cập nhật lại số tiền hóa đơn hoặc khi hóa đơn bị hủy.
+     */
+    private void cancelPendingPayments(String invoiceId, String ownerId) {
+        List<Payment> pendingPayments = paymentRepository.findByInvoiceIdAndOwnerIdAndStatus(
+                invoiceId, ownerId, PaymentStatus.PENDING);
+        pendingPayments.forEach(p -> {
+            p.setStatus(PaymentStatus.CANCELLED);
+            paymentRepository.save(p);
+        });
     }
 }

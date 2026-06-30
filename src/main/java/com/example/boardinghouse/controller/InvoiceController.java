@@ -7,6 +7,7 @@ import com.example.boardinghouse.dto.invoice.GenerateMonthlyInvoiceRequest;
 import com.example.boardinghouse.dto.invoice.MonthlyInvoiceGenerationResponse;
 import com.example.boardinghouse.dto.invoice.UpdateInvoiceRequest;
 import com.example.boardinghouse.service.InvoiceService;
+import com.example.boardinghouse.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +28,7 @@ import java.util.List;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+    private final PaymentService paymentService;
 
     /**
      * API: Lấy danh sách toàn bộ hóa đơn trên hệ thống.
@@ -97,7 +99,8 @@ public class InvoiceController {
      */
     @PatchMapping("/invoices/{id}/mark-paid")
     public ApiResponse<Invoice> markPaid(@PathVariable String id) {
-        Invoice invoice = invoiceService.markPaid(id);
+        paymentService.recordCashPayment(id, null);
+        Invoice invoice = invoiceService.getInvoiceById(id);
         return ApiResponse.success("Invoice marked as paid successfully", invoice);
     }
 
@@ -108,6 +111,7 @@ public class InvoiceController {
     @PatchMapping("/invoices/{id}/cancel")
     public ApiResponse<Invoice> cancelInvoice(@PathVariable String id) {
         Invoice invoice = invoiceService.cancelInvoice(id);
+        paymentService.cancelPendingPayments(invoice.getId(), invoice.getOwnerId());
         return ApiResponse.success("Invoice cancelled successfully", invoice);
     }
 

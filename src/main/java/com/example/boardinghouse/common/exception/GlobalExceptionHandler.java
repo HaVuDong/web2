@@ -1,6 +1,8 @@
 package com.example.boardinghouse.common.exception;
 
 import com.example.boardinghouse.common.dto.ApiResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -15,6 +17,9 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @Value("${app.errors.include-details:false}")
+    private boolean includeErrorDetails;
 
     @ExceptionHandler(ResourceNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
@@ -52,11 +57,20 @@ public class GlobalExceptionHandler {
         return ApiResponse.error("Invalid request parameter: " + ex.getName());
     }
 
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Object> handleOptimisticLockException(OptimisticLockingFailureException ex) {
+        return ApiResponse.error("Dữ liệu đã bị thay đổi bởi người khác, vui lòng tải lại");
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Object> handleGlobalException(Exception ex) {
         // Log the exception in real app
         // log.error("Unhandled exception", ex);
-        return ApiResponse.error("An unexpected error occurred: " + ex.getMessage());
+        if (includeErrorDetails) {
+            return ApiResponse.error("An unexpected error occurred: " + ex.getMessage());
+        }
+        return ApiResponse.error("An unexpected error occurred");
     }
 }

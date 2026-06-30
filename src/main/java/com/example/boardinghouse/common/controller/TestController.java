@@ -3,13 +3,14 @@ package com.example.boardinghouse.common.controller;
 import com.example.boardinghouse.common.dto.ApiResponse;
 import com.example.boardinghouse.common.exception.BadRequestException;
 import com.example.boardinghouse.common.exception.ResourceNotFoundException;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/test")
+@Profile({"dev", "test"})
 public class TestController {
 
     @GetMapping("/success")

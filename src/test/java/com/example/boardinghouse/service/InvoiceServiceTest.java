@@ -19,6 +19,8 @@ import com.example.boardinghouse.repository.MeterReadingRepository;
 import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.ServicePriceRepository;
+import com.example.boardinghouse.security.CurrentUserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class InvoiceServiceTest {
@@ -55,17 +58,25 @@ class InvoiceServiceTest {
     @Mock
     private PropertyRepository propertyRepository;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
     @InjectMocks
     private InvoiceService invoiceService;
+
+    @BeforeEach
+    void setUpOwner() {
+        lenient().when(currentUserService.getOwnerId()).thenReturn("owner-1");
+    }
 
     @Test
     void generateInvoiceCalculatesTotalAndSnapshotsPrices() {
         ServicePrice servicePrice = servicePrice();
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room("room-1", RoomStatus.OCCUPIED)));
-        when(contractRepository.findByRoomIdAndStatus("room-1", ContractStatus.ACTIVE)).thenReturn(Optional.of(contract()));
-        when(servicePriceRepository.findByPropertyId("property-1")).thenReturn(Optional.of(servicePrice));
-        when(meterReadingRepository.findByRoomIdAndMonthAndYear("room-1", 6, 2026)).thenReturn(Optional.of(meterReading()));
-        when(invoiceRepository.findByRoomIdAndMonthAndYear("room-1", 6, 2026)).thenReturn(Optional.empty());
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.of(room("room-1", RoomStatus.OCCUPIED)));
+        when(contractRepository.findByRoomIdAndOwnerIdAndStatus("room-1", "owner-1", ContractStatus.ACTIVE)).thenReturn(Optional.of(contract()));
+        when(servicePriceRepository.findByPropertyIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.of(servicePrice));
+        when(meterReadingRepository.findByRoomIdAndOwnerIdAndMonthAndYear("room-1", "owner-1", 6, 2026)).thenReturn(Optional.of(meterReading()));
+        when(invoiceRepository.findByRoomIdAndOwnerIdAndMonthAndYear("room-1", "owner-1", 6, 2026)).thenReturn(Optional.empty());
         when(invoiceRepository.save(any(Invoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Invoice invoice = invoiceService.generateInvoice(generateRequest(25_000L, 10_000L));
@@ -83,11 +94,11 @@ class InvoiceServiceTest {
 
     @Test
     void generateInvoiceRejectsDuplicateInvoice() {
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room("room-1", RoomStatus.OCCUPIED)));
-        when(contractRepository.findByRoomIdAndStatus("room-1", ContractStatus.ACTIVE)).thenReturn(Optional.of(contract()));
-        when(servicePriceRepository.findByPropertyId("property-1")).thenReturn(Optional.of(servicePrice()));
-        when(meterReadingRepository.findByRoomIdAndMonthAndYear("room-1", 6, 2026)).thenReturn(Optional.of(meterReading()));
-        when(invoiceRepository.findByRoomIdAndMonthAndYear("room-1", 6, 2026))
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.of(room("room-1", RoomStatus.OCCUPIED)));
+        when(contractRepository.findByRoomIdAndOwnerIdAndStatus("room-1", "owner-1", ContractStatus.ACTIVE)).thenReturn(Optional.of(contract()));
+        when(servicePriceRepository.findByPropertyIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.of(servicePrice()));
+        when(meterReadingRepository.findByRoomIdAndOwnerIdAndMonthAndYear("room-1", "owner-1", 6, 2026)).thenReturn(Optional.of(meterReading()));
+        when(invoiceRepository.findByRoomIdAndOwnerIdAndMonthAndYear("room-1", "owner-1", 6, 2026))
                 .thenReturn(Optional.of(Invoice.builder().id("invoice-1").build()));
 
         assertThatThrownBy(() -> invoiceService.generateInvoice(generateRequest(0L, 0L)))
@@ -99,15 +110,15 @@ class InvoiceServiceTest {
     void generateMonthlyInvoicesCreatesForOccupiedRoomsAndSkipsMissingData() {
         Room room1 = room("room-1", RoomStatus.OCCUPIED);
         Room room2 = room("room-2", RoomStatus.OCCUPIED);
-        when(propertyRepository.existsById("property-1")).thenReturn(true);
-        when(roomRepository.findByPropertyId("property-1")).thenReturn(List.of(room1, room2, room("room-3", RoomStatus.AVAILABLE)));
-        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room1));
-        when(roomRepository.findById("room-2")).thenReturn(Optional.of(room2));
-        when(contractRepository.findByRoomIdAndStatus("room-1", ContractStatus.ACTIVE)).thenReturn(Optional.of(contract()));
-        when(contractRepository.findByRoomIdAndStatus("room-2", ContractStatus.ACTIVE)).thenReturn(Optional.empty());
-        when(servicePriceRepository.findByPropertyId("property-1")).thenReturn(Optional.of(servicePrice()));
-        when(meterReadingRepository.findByRoomIdAndMonthAndYear("room-1", 6, 2026)).thenReturn(Optional.of(meterReading()));
-        when(invoiceRepository.findByRoomIdAndMonthAndYear("room-1", 6, 2026)).thenReturn(Optional.empty());
+        when(propertyRepository.findByIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.of(new com.example.boardinghouse.domain.entity.Property()));
+        when(roomRepository.findByPropertyIdAndOwnerId("property-1", "owner-1")).thenReturn(List.of(room1, room2, room("room-3", RoomStatus.AVAILABLE)));
+        when(roomRepository.findByIdAndOwnerId("room-1", "owner-1")).thenReturn(Optional.of(room1));
+        when(roomRepository.findByIdAndOwnerId("room-2", "owner-1")).thenReturn(Optional.of(room2));
+        when(contractRepository.findByRoomIdAndOwnerIdAndStatus("room-1", "owner-1", ContractStatus.ACTIVE)).thenReturn(Optional.of(contract()));
+        when(contractRepository.findByRoomIdAndOwnerIdAndStatus("room-2", "owner-1", ContractStatus.ACTIVE)).thenReturn(Optional.empty());
+        when(servicePriceRepository.findByPropertyIdAndOwnerId("property-1", "owner-1")).thenReturn(Optional.of(servicePrice()));
+        when(meterReadingRepository.findByRoomIdAndOwnerIdAndMonthAndYear("room-1", "owner-1", 6, 2026)).thenReturn(Optional.of(meterReading()));
+        when(invoiceRepository.findByRoomIdAndOwnerIdAndMonthAndYear("room-1", "owner-1", 6, 2026)).thenReturn(Optional.empty());
         when(invoiceRepository.save(any(Invoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         GenerateMonthlyInvoiceRequest request = new GenerateMonthlyInvoiceRequest();
@@ -126,12 +137,13 @@ class InvoiceServiceTest {
     void updateInvoiceRejectsPaidInvoice() {
         Invoice invoice = Invoice.builder()
                 .id("invoice-1")
+                .ownerId("owner-1")
                 .status(InvoiceStatus.PAID)
                 .build();
         UpdateInvoiceRequest request = new UpdateInvoiceRequest();
         request.setOtherFees(10_000L);
 
-        when(invoiceRepository.findById("invoice-1")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdAndOwnerId("invoice-1", "owner-1")).thenReturn(Optional.of(invoice));
 
         assertThatThrownBy(() -> invoiceService.updateInvoice("invoice-1", request))
                 .isInstanceOf(BadRequestException.class)
@@ -142,9 +154,10 @@ class InvoiceServiceTest {
     void cancelInvoiceRejectsPaidInvoice() {
         Invoice invoice = Invoice.builder()
                 .id("invoice-1")
+                .ownerId("owner-1")
                 .status(InvoiceStatus.PAID)
                 .build();
-        when(invoiceRepository.findById("invoice-1")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdAndOwnerId("invoice-1", "owner-1")).thenReturn(Optional.of(invoice));
 
         assertThatThrownBy(() -> invoiceService.cancelInvoice("invoice-1"))
                 .isInstanceOf(BadRequestException.class)
@@ -164,6 +177,7 @@ class InvoiceServiceTest {
     private Room room(String id, RoomStatus status) {
         return Room.builder()
                 .id(id)
+                .ownerId("owner-1")
                 .propertyId("property-1")
                 .status(status)
                 .build();
@@ -172,6 +186,7 @@ class InvoiceServiceTest {
     private Contract contract() {
         return Contract.builder()
                 .id("contract-1")
+                .ownerId("owner-1")
                 .roomId("room-1")
                 .monthlyRent(2_500_000L)
                 .paymentDueDay(5)
@@ -182,6 +197,7 @@ class InvoiceServiceTest {
     private MeterReading meterReading() {
         return MeterReading.builder()
                 .id("meter-1")
+                .ownerId("owner-1")
                 .roomId("room-1")
                 .month(6)
                 .year(2026)
@@ -195,6 +211,7 @@ class InvoiceServiceTest {
     private ServicePrice servicePrice() {
         return ServicePrice.builder()
                 .id("service-price-1")
+                .ownerId("owner-1")
                 .propertyId("property-1")
                 .electricityPrice(3500L)
                 .waterPrice(15000L)

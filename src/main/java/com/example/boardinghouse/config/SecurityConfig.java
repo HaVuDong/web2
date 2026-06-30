@@ -1,6 +1,7 @@
 package com.example.boardinghouse.config;
 
 import com.example.boardinghouse.security.CustomUserDetailsService;
+import com.example.boardinghouse.security.IdempotencyFilter;
 import com.example.boardinghouse.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,7 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final CustomUserDetailsService userDetailsService;
+    private final IdempotencyFilter idempotencyFilter;
 
     @Value("${app.cors.allowed-origin-patterns}")
     private String allowedOriginPatterns;
@@ -97,12 +99,13 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/webhooks/payos").permitAll()
                 .requestMatchers("/ws/realtime").permitAll()
-                .requestMatchers("/api/test/**").permitAll()
-                .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/api/test/**").hasAnyRole("OWNER")
+                .requestMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(idempotencyFilter, UsernamePasswordAuthenticationFilter.class);
             
         return http.build();
     }
@@ -124,8 +127,8 @@ public class SecurityConfig {
                 .toList()
         );
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key"));
+        configuration.setExposedHeaders(List.of("Authorization", "Idempotency-Key"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

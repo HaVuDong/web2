@@ -5,8 +5,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import com.example.boardinghouse.repository.IdempotencyRecordRepository;
 import com.example.boardinghouse.security.JwtAuthFilter;
 import com.example.boardinghouse.security.CustomUserDetailsService;
 
@@ -16,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = com.example.boardinghouse.common.controller.TestController.class, excludeAutoConfiguration = {SecurityAutoConfiguration.class})
 @AutoConfigureMockMvc(addFilters = false) // Disable security config if any for this test
+@ActiveProfiles("test")
 public class TestControllerIntegrationTest {
 
     @Autowired
@@ -23,6 +26,9 @@ public class TestControllerIntegrationTest {
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
+
+    @MockBean
+    private IdempotencyRecordRepository idempotencyRecordRepository;
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;

@@ -13,9 +13,17 @@ import java.util.Optional;
 public interface PaymentRepository extends MongoRepository<Payment, String> {
     Optional<Payment> findByOrderCode(Long orderCode);
 
+    Optional<Payment> findByIdAndOwnerId(String id, String ownerId);
+
     Optional<Payment> findFirstByInvoiceIdAndStatus(String invoiceId, PaymentStatus status);
 
+    Optional<Payment> findFirstByInvoiceIdAndOwnerIdAndStatus(String invoiceId, String ownerId, PaymentStatus status);
+
     List<Payment> findByInvoiceId(String invoiceId);
+
+    List<Payment> findByInvoiceIdAndOwnerId(String invoiceId, String ownerId);
+
+    List<Payment> findByInvoiceIdAndOwnerIdAndStatus(String invoiceId, String ownerId, PaymentStatus status);
 
     boolean existsByOrderCode(Long orderCode);
 }

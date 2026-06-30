@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -27,9 +28,12 @@ import java.time.LocalDateTime;
 /**
  * Thực thể đại diện cho một phòng trọ.
  */
-public class Room {
+public class Room implements SoftDeletable {
     @Id
     private String id;
+
+    @Indexed
+    private String ownerId;
 
     @Indexed
     private String propertyId;
@@ -57,4 +61,13 @@ public class Room {
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    @Version
+    private Long version;
+
+    @Builder.Default
+    private Boolean deleted = false;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
+    private String deleteReason;
 }
