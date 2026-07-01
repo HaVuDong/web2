@@ -1,0 +1,6 @@
+Cập nhật tính năng Real-time đồng bộ toàn cầu và dọn dẹp dự án
+
+- Xóa các file test và script không cần thiết (check.js, drop_collections.js...).
+- Thêm MongoRealtimeListener để tự động phát sự kiện qua WebSocket khi có thay đổi dữ liệu từ MongoDB.
+- Bổ sung loại sự kiện GLOBAL_UPDATE trong RealtimeEventPublisher để báo frontend tải lại dữ liệu.
+- Cập nhật entity User và xử lý ngoại lệ GlobalExceptionHandler.

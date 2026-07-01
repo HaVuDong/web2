@@ -63,6 +63,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.error("Dữ liệu đã bị thay đổi bởi người khác, vui lòng tải lại");
     }
 
+    @ExceptionHandler(org.springframework.dao.DuplicateKeyException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Object> handleDuplicateKeyException(org.springframework.dao.DuplicateKeyException ex) {
+        return ApiResponse.error("Dữ liệu này đã tồn tại trong hệ thống (trùng lặp)!");
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Object> handleGlobalException(Exception ex) {

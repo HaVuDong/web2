@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class RealtimeEventPublisher {
 
     public static final String PAYMENT_UPDATED = "PAYMENT_UPDATED";
+    public static final String GLOBAL_UPDATE = "GLOBAL_UPDATE";
 
     private final RealtimeWebSocketHandler realtimeWebSocketHandler;
 
@@ -29,5 +30,12 @@ public class RealtimeEventPublisher {
                 payment.getPaidAt()
         );
         realtimeWebSocketHandler.broadcast(RealtimeEvent.of(PAYMENT_UPDATED, data));
+    }
+
+    /**
+     * Gửi thông báo cho tất cả client để đồng bộ hóa dữ liệu (invalidate all queries).
+     */
+    public void publishGlobalUpdate() {
+        realtimeWebSocketHandler.broadcast(RealtimeEvent.of(GLOBAL_UPDATE, null));
     }
 }
