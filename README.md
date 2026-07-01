@@ -1,29 +1,30 @@
-# TỔNG HỢP API - Backend QL_Tro (Boarding House API)
+# TỔNG HỢP GIAO DIỆN LẬP TRÌNH ỨNG DỤNG (API) ĐÃ HOÀN THÀNH
+**Máy chủ Hệ thống Quản Lý Trọ (Backend QL_Tro)**
 
-**Base URL local:** `http://localhost:8080`  
-**API prefix:** `/api`  
-**Auth:** JWT Bearer  
-**Ngày tổng hợp:** 24/06/2026
+- **Địa chỉ gốc cục bộ (Base URL local):** `http://localhost:8080`
+- **Tiền tố API (API prefix):** `/api`
+- **Xác thực (Auth):** Sử dụng Mã thông báo JWT (JWT Bearer)
+- **Ngày tổng hợp:** 24/06/2026
 
 ## Tóm tắt Hạng mục
 
 | Hạng mục | Tóm tắt |
 | :--- | :--- |
-| **Tổng số endpoint trong `/api`** | 60 endpoint |
-| **Endpoint public chính** | `POST /api/auth/login`, `POST /api/webhooks/payos`, `GET /api/test/**` |
-| **Endpoint cần đăng nhập** | Toàn bộ endpoint còn lại dùng `Authorization: Bearer <token>` |
-| **Nhóm nghiệp vụ đã có** | Auth, User, Property, Room, Tenant, Contract, Service Price, Meter Reading, Invoice, Payment, Dashboard, Maintenance, Real-time |
-| **Chuẩn response** | `ApiResponse { success, message, data, timestamp }` |
+| **Tổng số đường dẫn API** | 60 đường dẫn (endpoint) |
+| **Các đường dẫn công khai chính** | `POST /api/auth/login`, `POST /api/webhooks/payos`, `GET /api/test/**` |
+| **Các đường dẫn yêu cầu đăng nhập** | Toàn bộ các đường dẫn còn lại đều bắt buộc gửi kèm Mã thông báo ở Header: `Authorization: Bearer <token>` |
+| **Nhóm nghiệp vụ đã hoàn thiện** | Xác thực, Người dùng, Nhà trọ, Phòng, Khách thuê, Hợp đồng, Giá dịch vụ, Chốt số điện nước, Hóa đơn, Thanh toán, Bảng thống kê, Yêu cầu bảo trì, Đồng bộ dữ liệu tức thời (Real-time) |
+| **Chuẩn phản hồi (Response)** | Định dạng chuẩn: `ApiResponse { success, message, data, timestamp }` |
 
 ## Mục lục nhanh
 1. Tổng quan kỹ thuật
-2. Xác thực và chuẩn response
-3. Thống kê endpoint theo nhóm
-4. Danh sách endpoint đã hoàn thành
-5. Luồng nghiệp vụ frontend nên tích hợp
+2. Xác thực và chuẩn phản hồi
+3. Thống kê đường dẫn theo nhóm
+4. Danh sách đường dẫn đã hoàn thành
+5. Luồng nghiệp vụ dành cho ứng dụng (Frontend)
 6. Quy tắc nghiệp vụ quan trọng
-7. Enum hệ thống
-8. Checklist tích hợp frontend
+7. Các giá trị cố định (Enum) của hệ thống
+8. Danh sách kiểm tra khi tích hợp
 
 ---
 
@@ -31,25 +32,25 @@
 
 | Thông tin | Giá trị |
 | :--- | :--- |
-| **Base URL local** | `http://localhost:8080` |
-| **API prefix chính** | `/api` |
-| **Health check** | `GET /actuator/health` |
-| **Cơ chế xác thực** | JWT Bearer token |
-| **Header cho API cần đăng nhập** | `Authorization: Bearer <token>` và `Content-Type: application/json` |
-| **Response chuẩn** | Tất cả response thành công/lỗi đều bọc trong `ApiResponse` |
-| **Đồng bộ thời gian thực** | WebSocket tại `/ws/realtime` (bắn sự kiện `GLOBAL_UPDATE` và `PAYMENT_UPDATED`) |
+| **Địa chỉ gốc cục bộ** | `http://localhost:8080` |
+| **Tiền tố API chính** | `/api` |
+| **Kiểm tra sức khỏe hệ thống** | `GET /actuator/health` |
+| **Cơ chế xác thực** | Mã thông báo JWT (Bearer token) |
+| **Cấu hình cho API cần đăng nhập** | Gửi kèm tiêu đề: `Authorization: Bearer <token>` và `Content-Type: application/json` |
+| **Phản hồi chuẩn** | Tất cả kết quả trả về (dù thành công hay lỗi) đều được bọc trong đối tượng `ApiResponse` |
+| **Đồng bộ thời gian thực** | Sử dụng kết nối liên tục (WebSocket) tại `/ws/realtime` (Hệ thống sẽ gửi sự kiện `GLOBAL_UPDATE` và `PAYMENT_UPDATED`) |
 
 ---
 
-## 2. Xác thực và chuẩn response
+## 2. Xác thực và chuẩn phản hồi
 
-### 2.1. Endpoint đăng nhập
+### 2.1. Đường dẫn đăng nhập
 
-- **Mục đích:** Đăng nhập và lấy JWT (Public)
-- **Method:** `POST`
-- **Path:** `/api/auth/login`
+- **Mục đích:** Đăng nhập và lấy Mã thông báo (Công khai)
+- **Phương thức:** `POST`
+- **Đường dẫn:** `/api/auth/login`
 
-**Request Body:**
+**Dữ liệu gửi lên (Request Body):**
 ```json
 {
   "email": "owner@gmail.com",
@@ -57,10 +58,10 @@
 }
 ```
 
-**Response:**
+**Dữ liệu trả về (Response):**
 ```json
 {
-  "token": "<jwt>",
+  "token": "<mã_jwt>",
   "type": "Bearer",
   "email": "owner@gmail.com",
   "name": "Chu Tro",
@@ -68,189 +69,182 @@
 }
 ```
 
-### 2.2. Mẫu response chuẩn
+### 2.2. Mẫu phản hồi chuẩn
 
-**Thành công (Success):**
+**Thành công:**
 ```json
 {
   "success": true,
-  "message": "Success",
+  "message": "Thành công",
   "data": {},
   "timestamp": "2026-06-23T18:00:00"
 }
 ```
 
-**Lỗi (Error):**
+**Lỗi:**
 ```json
 {
   "success": false,
-  "message": "Validation failed: {field=message}",
+  "message": "Lỗi xác thực dữ liệu: {trường_bị_lỗi=thông_báo_lỗi}",
   "data": null,
   "timestamp": "2026-06-23T18:00:00"
 }
 ```
 
-### 2.3. Status code lỗi chính
+### 2.3. Các mã trạng thái lỗi (HTTP Status code) chính
 
-| Status | Khi nào dùng |
+| Mã trạng thái | Khi nào sử dụng |
 | :--- | :--- |
-| **400** | Body sai, validation fail, enum/query param sai, business rule sai |
-| **404** | Không tìm thấy resource |
-| **500** | Lỗi không dự kiến |
+| **400 (Yêu cầu không hợp lệ)** | Dữ liệu gửi lên bị sai, không qua được kiểm tra xác thực, sai tham số, vi phạm quy tắc nghiệp vụ |
+| **404 (Không tìm thấy)** | Không tìm thấy dữ liệu yêu cầu |
+| **500 (Lỗi máy chủ)** | Xảy ra lỗi hệ thống ngoài dự kiến |
 
 ---
 
-## 3. Thống kê endpoint theo nhóm
+## 3. Thống kê đường dẫn API theo nhóm
 
-| Nhóm | Số endpoint | Phạm vi |
+| Nhóm chức năng | Số lượng | Phạm vi thực hiện |
 | :--- | :--- | :--- |
-| **Auth** | 1 | Đăng nhập lấy token |
-| **User** | 1 | Lấy thông tin user hiện tại |
-| **Property** | 5 | CRUD nhà trọ/cơ sở |
-| **Room** | 6 | CRUD phòng, danh sách phòng theo property, đổi trạng thái |
-| **Tenant** | 6 | CRUD khách thuê, tìm kiếm/lọc, danh sách tenant theo phòng |
-| **Contract** | 6 | CRUD hợp đồng, terminate, renew |
-| **Service Price** | 2 | Lấy/cập nhật giá điện, nước, wifi, rác, giữ xe |
-| **Meter Reading** | 6 | CRUD chỉ số điện nước, lịch sử và chỉ số mới nhất |
-| **Invoice** | 9 | Tạo, cập nhật, hủy, đánh dấu thanh toán, invoice theo phòng |
-| **Payment** | 4 | Tạo payment link PayOS, webhook, xem payment |
-| **Dashboard** | 4 | Summary, revenue, debts, room status |
-| **Maintenance** | 6 | CRUD yêu cầu bảo trì, cập nhật trạng thái |
-| **Dev/Test** | 4 | Test wrapper response và exception handler |
+| **Xác thực (Auth)** | 1 | Đăng nhập lấy mã thông báo |
+| **Người dùng (User)** | 1 | Lấy thông tin người dùng hiện tại |
+| **Nhà trọ (Property)** | 5 | Thêm, xem, sửa, xóa cơ sở nhà trọ |
+| **Phòng (Room)** | 6 | Thêm, xem, sửa, xóa phòng, danh sách phòng theo cơ sở, đổi trạng thái phòng |
+| **Khách thuê (Tenant)** | 6 | Thêm, xem, sửa, xóa khách thuê, tìm kiếm/lọc, danh sách khách theo phòng |
+| **Hợp đồng (Contract)** | 6 | Thêm, xem, sửa hợp đồng, kết thúc, gia hạn |
+| **Giá dịch vụ (Service Price)**| 2 | Xem/cập nhật giá điện, nước, wifi, rác, giữ xe |
+| **Chốt số điện nước** | 6 | Thêm, xem, sửa, xóa chỉ số điện nước, xem lịch sử và chỉ số mới nhất |
+| **Hóa đơn (Invoice)** | 9 | Tạo, cập nhật, hủy, đánh dấu đã thanh toán, xem hóa đơn theo phòng |
+| **Thanh toán (Payment)** | 4 | Tạo đường dẫn thanh toán PayOS, nhận thông báo tự động (webhook), xem lịch sử thanh toán |
+| **Bảng thống kê (Dashboard)** | 4 | Thống kê tổng quan, doanh thu, công nợ, tình trạng phòng |
+| **Bảo trì (Maintenance)** | 6 | Thêm, xem, sửa, xóa yêu cầu bảo trì, cập nhật trạng thái xử lý |
+| **Môi trường thử nghiệm** | 4 | Kiểm tra các mẫu phản hồi và bộ xử lý lỗi |
 
 ---
 
-## 4. Danh sách endpoint đã hoàn thành
+## 4. Danh sách API đã hoàn thành chi tiết
 
-| Nhóm | Method | Path | Mục đích/Ghi chú |
+| Nhóm | Phương thức | Đường dẫn (Path) | Mục đích / Ghi chú |
 | :--- | :--- | :--- | :--- |
-| Auth | POST | `/api/auth/login` | Đăng nhập và lấy JWT |
-| User | GET | `/api/users/me` | Lấy user hiện tại, passwordHash trả về null |
-| Property | GET | `/api/properties` | Lấy danh sách nhà trọ |
-| Property | POST | `/api/properties` | Tạo nhà trọ |
-| Property | GET | `/api/properties/{id}` | Lấy chi tiết nhà trọ |
-| Property | PUT | `/api/properties/{id}` | Cập nhật nhà trọ |
-| Property | DELETE | `/api/properties/{id}` | Xóa nhà trọ |
-| Room | GET | `/api/properties/{propertyId}/rooms` | Lấy danh sách phòng theo property |
-| Room | POST | `/api/properties/{propertyId}/rooms` | Tạo phòng trong property |
-| Room | GET | `/api/rooms/{id}` | Lấy chi tiết phòng |
-| Room | PUT | `/api/rooms/{id}` | Cập nhật phòng |
-| Room | DELETE | `/api/rooms/{id}` | Xóa phòng |
-| Room | PATCH | `/api/rooms/{id}/status` | Cập nhật trạng thái phòng |
-| Tenant | GET | `/api/tenants?keyword=&status=` | Tìm kiếm/lọc khách thuê |
-| Tenant | POST | `/api/tenants` | Tạo khách thuê |
-| Tenant | GET | `/api/tenants/{id}` | Lấy chi tiết khách thuê |
-| Tenant | PUT | `/api/tenants/{id}` | Cập nhật khách thuê |
-| Tenant | DELETE | `/api/tenants/{id}` | Đánh dấu khách thuê LEFT |
-| Tenant | GET | `/api/rooms/{roomId}/tenants` | Lấy khách thuê đang gắn với phòng |
-| Contract | GET | `/api/contracts` | Lấy danh sách hợp đồng |
-| Contract | POST | `/api/contracts` | Tạo hợp đồng, gắn tenant vào phòng |
-| Contract | GET | `/api/contracts/{id}` | Lấy chi tiết hợp đồng |
-| Contract | PUT | `/api/contracts/{id}` | Cập nhật hợp đồng |
-| Contract | PATCH | `/api/contracts/{id}/terminate` | Kết thúc hợp đồng |
-| Contract | PATCH | `/api/contracts/{id}/renew` | Gia hạn hợp đồng |
-| Service Price | GET | `/api/properties/{propertyId}/service-prices` | Lấy cấu hình giá dịch vụ |
-| Service Price | PUT | `/api/properties/{propertyId}/service-prices` | Cập nhật giá điện, nước, wifi, rác, giữ xe |
-| Meter Reading | GET | `/api/meter-readings` | Lấy tất cả chỉ số điện nước |
-| Meter Reading | POST | `/api/meter-readings` | Tạo chỉ số điện nước cho phòng/tháng |
-| Meter Reading | GET | `/api/rooms/{roomId}/meter-readings` | Lấy lịch sử chỉ số điện nước của phòng |
-| Meter Reading | GET | `/api/rooms/{roomId}/latest-meter-reading` | Lấy chỉ số mới nhất của phòng |
-| Meter Reading | PUT | `/api/meter-readings/{id}` | Cập nhật chỉ số điện nước |
-| Meter Reading | DELETE | `/api/meter-readings/{id}` | Xóa chỉ số điện nước |
-| Invoice | GET | `/api/invoices` | Lấy tất cả hóa đơn |
-| Invoice | POST | `/api/invoices/generate` | Tạo hóa đơn cho một phòng/tháng |
-| Invoice | POST | `/api/invoices/generate-monthly` | Tạo hóa đơn hàng loạt theo property/tháng |
-| Invoice | GET | `/api/invoices/{id}` | Lấy chi tiết hóa đơn |
-| Invoice | PUT | `/api/invoices/{id}` | Cập nhật phí phụ, giảm giá, hạn thanh toán, ghi chú |
-| Invoice | DELETE | `/api/invoices/{id}` | Xóa hóa đơn chưa PAID |
-| Invoice | PATCH | `/api/invoices/{id}/mark-paid` | Đánh dấu hóa đơn đã thanh toán thủ công |
-| Invoice | PATCH | `/api/invoices/{id}/cancel` | Hủy hóa đơn chưa PAID |
-| Invoice | GET | `/api/rooms/{roomId}/invoices` | Lấy danh sách hóa đơn của một phòng |
-| Payment | POST | `/api/invoices/{invoiceId}/payment-link` | Tạo hoặc lấy lại link thanh toán PayOS PENDING |
-| Payment | POST | `/api/webhooks/payos` | Webhook PayOS public có verify signature |
-| Payment | GET | `/api/payments/{id}` | Lấy chi tiết payment |
-| Payment | GET | `/api/invoices/{invoiceId}/payments` | Lấy danh sách payment của invoice |
-| Dashboard | GET | `/api/dashboard/summary` | Tổng quan phòng, doanh thu, công nợ, bảo trì |
-| Dashboard | GET | `/api/dashboard/revenue?month=&year=` | Báo cáo doanh thu theo tháng/năm |
-| Dashboard | GET | `/api/dashboard/debts` | Tổng công nợ và invoice chưa thanh toán |
-| Dashboard | GET | `/api/dashboard/rooms-status` | Thống kê trạng thái phòng |
-| Maintenance | GET | `/api/maintenance-requests?status=` | Lấy/lọc yêu cầu bảo trì theo status |
-| Maintenance | POST | `/api/maintenance-requests` | Tạo yêu cầu bảo trì |
-| Maintenance | GET | `/api/maintenance-requests/{id}` | Lấy chi tiết yêu cầu bảo trì |
-| Maintenance | PUT | `/api/maintenance-requests/{id}` | Cập nhật nội dung/priority yêu cầu bảo trì |
-| Maintenance | PATCH | `/api/maintenance-requests/{id}/status` | Cập nhật trạng thái xử lý bảo trì |
-| Maintenance | DELETE | `/api/maintenance-requests/{id}` | Xóa yêu cầu bảo trì |
+| Xác thực | POST | `/api/auth/login` | Đăng nhập và lấy mã thông báo |
+| Người dùng | GET | `/api/users/me` | Lấy thông tin tài khoản đang đăng nhập (ẩn mật khẩu) |
+| Nhà trọ | GET | `/api/properties` | Lấy danh sách nhà trọ |
+| Nhà trọ | POST | `/api/properties` | Tạo nhà trọ mới |
+| Nhà trọ | GET | `/api/properties/{id}` | Xem chi tiết một nhà trọ |
+| Nhà trọ | PUT | `/api/properties/{id}` | Cập nhật thông tin nhà trọ |
+| Nhà trọ | DELETE | `/api/properties/{id}` | Xóa nhà trọ |
+| Phòng | GET | `/api/properties/{propertyId}/rooms` | Lấy danh sách phòng thuộc một nhà trọ |
+| Phòng | POST | `/api/properties/{propertyId}/rooms` | Tạo phòng mới trong nhà trọ |
+| Phòng | GET | `/api/rooms/{id}` | Lấy chi tiết một phòng |
+| Phòng | PUT | `/api/rooms/{id}` | Cập nhật thông tin phòng |
+| Phòng | DELETE | `/api/rooms/{id}` | Xóa phòng |
+| Phòng | PATCH | `/api/rooms/{id}/status` | Đổi trạng thái phòng |
+| Khách thuê | GET | `/api/tenants?keyword=&status=` | Tìm kiếm và lọc danh sách khách thuê |
+| Khách thuê | POST | `/api/tenants` | Thêm khách thuê mới |
+| Khách thuê | GET | `/api/tenants/{id}` | Xem chi tiết khách thuê |
+| Khách thuê | PUT | `/api/tenants/{id}` | Cập nhật thông tin khách |
+| Khách thuê | DELETE | `/api/tenants/{id}` | Đánh dấu khách thuê đã rời đi |
+| Khách thuê | GET | `/api/rooms/{roomId}/tenants` | Lấy danh sách khách thuê đang ở trong phòng |
+| Hợp đồng | GET | `/api/contracts` | Lấy danh sách hợp đồng |
+| Hợp đồng | POST | `/api/contracts` | Lập hợp đồng mới, tự động gắn khách vào phòng |
+| Hợp đồng | GET | `/api/contracts/{id}` | Lấy chi tiết hợp đồng |
+| Hợp đồng | PUT | `/api/contracts/{id}` | Cập nhật nội dung hợp đồng |
+| Hợp đồng | PATCH | `/api/contracts/{id}/terminate` | Kết thúc hợp đồng (khách trả phòng) |
+| Hợp đồng | PATCH | `/api/contracts/{id}/renew` | Gia hạn hợp đồng |
+| Giá dịch vụ | GET | `/api/properties/{propertyId}/service-prices`| Xem bảng giá dịch vụ của nhà trọ |
+| Giá dịch vụ | PUT | `/api/properties/{propertyId}/service-prices`| Cập nhật giá điện, nước, wifi, rác, xe |
+| Số điện nước| GET | `/api/meter-readings` | Lấy danh sách toàn bộ chỉ số |
+| Số điện nước| POST | `/api/meter-readings` | Tạo chốt số điện nước cho một phòng/tháng |
+| Số điện nước| GET | `/api/rooms/{roomId}/meter-readings` | Xem lịch sử chốt số của một phòng |
+| Số điện nước| GET | `/api/rooms/{roomId}/latest-meter-reading` | Lấy chỉ số chốt gần nhất của phòng |
+| Số điện nước| PUT | `/api/meter-readings/{id}` | Cập nhật số điện nước |
+| Số điện nước| DELETE | `/api/meter-readings/{id}` | Xóa bản ghi chốt số |
+| Hóa đơn | GET | `/api/invoices` | Lấy danh sách toàn bộ hóa đơn |
+| Hóa đơn | POST | `/api/invoices/generate` | Tạo hóa đơn cho một phòng/tháng |
+| Hóa đơn | POST | `/api/invoices/generate-monthly` | Tạo hóa đơn hàng loạt cho cả nhà trọ/tháng |
+| Hóa đơn | GET | `/api/invoices/{id}` | Xem chi tiết hóa đơn |
+| Hóa đơn | PUT | `/api/invoices/{id}` | Cập nhật phụ phí, giảm giá, hạn chót, ghi chú |
+| Hóa đơn | DELETE | `/api/invoices/{id}` | Xóa hóa đơn chưa thanh toán |
+| Hóa đơn | PATCH | `/api/invoices/{id}/mark-paid` | Đánh dấu hóa đơn đã thanh toán bằng tay |
+| Hóa đơn | PATCH | `/api/invoices/{id}/cancel` | Hủy bỏ hóa đơn chưa thanh toán |
+| Hóa đơn | GET | `/api/rooms/{roomId}/invoices` | Lấy danh sách hóa đơn của một phòng |
+| Thanh toán | POST | `/api/invoices/{invoiceId}/payment-link`| Tạo mới hoặc lấy lại đường dẫn thanh toán qua PayOS |
+| Thanh toán | POST | `/api/webhooks/payos` | Điểm nhận thông báo công khai từ PayOS (có kiểm tra chữ ký xác thực) |
+| Thanh toán | GET | `/api/payments/{id}` | Xem chi tiết giao dịch thanh toán |
+| Thanh toán | GET | `/api/invoices/{invoiceId}/payments`| Lấy lịch sử giao dịch của một hóa đơn |
+| Thống kê | GET | `/api/dashboard/summary` | Xem tổng quan phòng, doanh thu, công nợ, bảo trì |
+| Thống kê | GET | `/api/dashboard/revenue?month=&year=`| Xem báo cáo doanh thu theo tháng/năm |
+| Thống kê | GET | `/api/dashboard/debts` | Tổng công nợ và danh sách hóa đơn chưa thu |
+| Thống kê | GET | `/api/dashboard/rooms-status` | Thống kê số lượng phòng trống/đang thuê |
+| Bảo trì | GET | `/api/maintenance-requests?status=` | Xem và lọc yêu cầu bảo trì theo trạng thái |
+| Bảo trì | POST | `/api/maintenance-requests` | Tạo yêu cầu bảo trì mới |
+| Bảo trì | GET | `/api/maintenance-requests/{id}` | Lấy chi tiết một yêu cầu |
+| Bảo trì | PUT | `/api/maintenance-requests/{id}` | Sửa nội dung hoặc mức độ ưu tiên của yêu cầu |
+| Bảo trì | PATCH | `/api/maintenance-requests/{id}/status` | Đổi trạng thái xử lý bảo trì |
+| Bảo trì | DELETE | `/api/maintenance-requests/{id}` | Xóa yêu cầu bảo trì |
 
 ---
 
-## 5. Luồng nghiệp vụ frontend nên tích hợp
+## 5. Luồng nghiệp vụ ưu tiên cho Ứng dụng (Frontend)
 
-| Bước | Luồng | API/Thao tác chính |
+| Bước | Quy trình | Nhóm API và thao tác chính |
 | :--- | :--- | :--- |
-| **1** | **Đăng nhập** | `POST /api/auth/login` -> lưu `data.token` -> gắn `Authorization: Bearer` cho các API cần đăng nhập. |
-| **2** | **Dashboard** | Gọi `/dashboard/summary`, `/dashboard/revenue`, `/dashboard/debts`, `/dashboard/rooms-status` sau khi đăng nhập. |
-| **3** | **Quản lý cơ sở** | CRUD `/api/properties`, CRUD room theo property. |
-| **4** | **Cấu hình thu phí** | `PUT /api/properties/{propertyId}/service-prices`. |
-| **5** | **Quản lý khách thuê** | CRUD `/api/tenants`, xem tenant theo phòng bằng `/api/rooms/{roomId}/tenants`. |
-| **6** | **Lập hợp đồng** | `POST /api/contracts` với `roomId` + `tenantIds` rỗng; terminate/renew khi trả phòng hoặc gia hạn. |
-| **7** | **Hàng tháng** | Tạo meter reading, tạo invoice đơn lẻ hoặc `generate-monthly`. |
-| **8** | **Thu tiền** | Tạo PayOS payment link, hiển thị `checkoutUrl`/`qrCode`, poll invoice/payment hoặc nghe WebSocket để cập nhật. |
-| **9** | **Bảo trì** | Tạo request, lọc theo status, cập nhật trạng thái `PENDING` -> `IN_PROGRESS` -> `DONE`/`CANCELLED`. |
+| **1** | **Đăng nhập** | Gọi `POST /api/auth/login` -> lưu mã `data.token` -> tự động gắn `Authorization: Bearer` cho mọi API khác. |
+| **2** | **Xem thống kê** | Gọi các API nhóm Thống kê (Summary, Revenue, Debts, Rooms-status) ngay sau khi đăng nhập. |
+| **3** | **Quản lý cơ sở** | Thao tác Thêm/Sửa/Xóa nhà trọ (`/api/properties`) và quản lý phòng thuộc nhà trọ đó. |
+| **4** | **Bảng giá thu phí** | Gọi `PUT /api/properties/{propertyId}/service-prices` để thiết lập giá. |
+| **5** | **Quản lý khách** | Thao tác danh sách khách thuê (`/api/tenants`), xem khách theo từng phòng. |
+| **6** | **Ký hợp đồng** | Lập hợp đồng mới (`POST /api/contracts`); kết thúc hoặc gia hạn hợp đồng khi hết hạn. |
+| **7** | **Đầu tháng/Cuối tháng**| Chốt số điện nước, sau đó tạo hóa đơn lẻ hoặc tạo hàng loạt cho cả nhà trọ. |
+| **8** | **Thu tiền** | Tạo đường dẫn thanh toán PayOS, hiển thị mã QR, tự động cập nhật trạng thái thông qua kết nối liên tục (WebSocket). |
+| **9** | **Bảo trì sửa chữa** | Lập phiếu yêu cầu, cập nhật quá trình từ lúc Chờ xử lý -> Đang xử lý -> Hoàn thành. |
 
 ---
 
 ## 6. Quy tắc nghiệp vụ quan trọng
 
-| Module | Rule |
+| Tính năng | Quy tắc ràng buộc |
 | :--- | :--- |
-| **Room** | Trạng thái hợp lệ: `AVAILABLE`, `OCCUPIED`, `RESERVED`, `MAINTENANCE`. Xóa phòng có thể bị chặn nếu có hợp đồng/dữ liệu liên quan. |
-| **Tenant** | DELETE tenant không hard delete ngay mà đánh dấu status `LEFT`. |
-| **Contract** | Tạo contract cần `roomId` và `tenantIds` không rỗng. Backend tự động cập nhật phòng thành `OCCUPIED` và gắn tenant vào phòng. |
-| **Service Price** | Tất cả field giá dịch vụ bắt buộc và `>= 0`. |
-| **Meter Reading** | Không tạo trùng `roomId` + `month` + `year`. Chỉ số mới phải `>=` chỉ số cũ. Không sửa/xóa nếu invoice cùng kỳ đã `PAID`. |
-| **Invoice** | Chỉ tạo invoice khi room có active contract, property có service price, có meter reading đúng kỳ và chưa có invoice trùng. |
-| **Invoice** | `totalAmount = rent + electricity + water + wifi + garbage + parking + otherFees - discountAmount`. |
-| **Payment PayOS** | Invoice `PAID`/`CANCELLED` không tạo payment link mới. Nếu đã có payment `PENDING` thì trả lại link cũ. |
-| **Webhook PayOS** | Webhook public nhưng phải verify signature; success code `00` cập nhật payment `PAID` và invoice `PAID`. |
-| **Dashboard** | Dùng để render màn tổng quan sau login; revenue có `month`/`year` optional, nếu bỏ trống backend dùng kỳ hiện tại. |
-| **Maintenance** | Status hợp lệ: `PENDING`, `IN_PROGRESS`, `DONE`, `CANCELLED`; priority: `LOW`, `MEDIUM`, `HIGH`. |
+| **Phòng** | Các trạng thái cho phép: Trống (`AVAILABLE`), Đang thuê (`OCCUPIED`), Đã đặt cọc (`RESERVED`), Đang sửa chữa (`MAINTENANCE`). Sẽ bị chặn xóa nếu phòng đang có dữ liệu ràng buộc. |
+| **Khách thuê** | Khi xóa khách thuê, hệ thống không xóa vĩnh viễn mà chỉ đánh dấu trạng thái là Đã rời đi (`LEFT`). |
+| **Hợp đồng** | Khi lập hợp đồng bắt buộc phải truyền mã phòng và danh sách khách. Hệ thống sẽ tự động cập nhật phòng thành Đang thuê (`OCCUPIED`) và gắn khách vào phòng đó. |
+| **Giá dịch vụ** | Bắt buộc phải có đầy đủ các mục giá dịch vụ cơ bản và giá trị phải `>= 0`. |
+| **Chốt điện nước** | Không được chốt trùng tháng/năm của cùng một phòng. Chỉ số mới nhập bắt buộc phải `>=` chỉ số cũ. Không cho phép sửa/xóa nếu hóa đơn của tháng đó đã được thanh toán. |
+| **Hóa đơn** | Chỉ có thể tạo hóa đơn khi: phòng có hợp đồng còn hiệu lực, nhà trọ đã thiết lập giá, đã có chốt số điện nước của tháng, và chưa có hóa đơn nào trùng lặp. |
+| **Thành tiền** | Tính theo công thức: Tiền phòng + Điện + Nước + Wifi + Rác + Gửi xe + Phụ phí - Tiền giảm giá. |
+| **Thanh toán PayOS** | Hóa đơn đã thanh toán hoặc đã hủy sẽ không được phép tạo đường dẫn thanh toán mới. Nếu đang có đường dẫn chờ thanh toán, hệ thống sẽ trả lại đường dẫn cũ. |
+| **Nhận thông báo PayOS** | Giao diện công khai nhưng hệ thống sẽ kiểm tra chữ ký bảo mật. Nếu giao dịch thành công (mã `00`), hệ thống sẽ tự đổi trạng thái thanh toán và hóa đơn thành Đã thanh toán (`PAID`). |
+| **Thống kê** | Nếu gọi báo cáo doanh thu mà không truyền tháng/năm, máy chủ sẽ tự lấy dữ liệu của tháng hiện tại. |
+| **Bảo trì** | Các trạng thái cho phép: Chờ xử lý (`PENDING`), Đang thực hiện (`IN_PROGRESS`), Hoàn tất (`DONE`), Đã hủy (`CANCELLED`). Độ ưu tiên gồm: Thấp (`LOW`), Trung bình (`MEDIUM`), Cao (`HIGH`). |
 
 ---
 
-## 7. Enum hệ thống
+## 7. Các giá trị cố định (Enum) của hệ thống
 
-| Enum | Giá trị |
+| Tên nhóm | Các giá trị hợp lệ |
 | :--- | :--- |
-| **UserRole** | `OWNER` |
-| **RoomStatus** | `AVAILABLE`, `OCCUPIED`, `RESERVED`, `MAINTENANCE` |
-| **TenantStatus** | `ACTIVE`, `LEFT` |
-| **ContractStatus** | `ACTIVE`, `EXPIRED`, `TERMINATED`, `PENDING` |
-| **InvoiceStatus** | `UNPAID`, `PAID`, `PARTIAL`, `OVERDUE`, `CANCELLED` |
-| **PaymentProvider** | `PAYOS` |
-| **PaymentStatus** | `PENDING`, `PAID`, `FAILED`, `CANCELLED` |
-| **MaintenancePriority** | `LOW`, `MEDIUM`, `HIGH` |
-| **MaintenanceStatus** | `PENDING`, `IN_PROGRESS`, `DONE`, `CANCELLED` |
+| **Vai trò (UserRole)** | Chủ nhà (`OWNER`) |
+| **Tình trạng phòng (RoomStatus)** | `AVAILABLE`, `OCCUPIED`, `RESERVED`, `MAINTENANCE` |
+| **Tình trạng khách (TenantStatus)** | Đang thuê (`ACTIVE`), Đã rời đi (`LEFT`) |
+| **Trạng thái hợp đồng (ContractStatus)** | Đang hiệu lực (`ACTIVE`), Hết hạn (`EXPIRED`), Đã chấm dứt (`TERMINATED`), Chờ duyệt (`PENDING`) |
+| **Trạng thái hóa đơn (InvoiceStatus)** | Chưa thanh toán (`UNPAID`), Đã thanh toán (`PAID`), Thanh toán một phần (`PARTIAL`), Quá hạn (`OVERDUE`), Đã hủy (`CANCELLED`) |
+| **Đơn vị thanh toán (PaymentProvider)**| `PAYOS` |
+| **Trạng thái giao dịch (PaymentStatus)**| Chờ thanh toán (`PENDING`), Thành công (`PAID`), Thất bại (`FAILED`), Đã hủy (`CANCELLED`) |
+| **Độ ưu tiên bảo trì (MaintenancePriority)** | `LOW`, `MEDIUM`, `HIGH` |
+| **Trạng thái bảo trì (MaintenanceStatus)** | `PENDING`, `IN_PROGRESS`, `DONE`, `CANCELLED` |
 
 ---
 
-## 8. Checklist tích hợp frontend
+## 8. Danh sách kiểm tra dành cho đội ngũ phát triển giao diện (Frontend)
 
-- [x] Tạo service HTTP dùng chung, tự động gắn `Authorization Bearer` sau khi login.
-- [x] Chuẩn hóa parser response theo `ApiResponse`: luôn đọc `success`, `message`, `data`, `timestamp`.
-- [x] Với lỗi 400/404/500, hiển thị message từ backend thay vì chỉ hiện lỗi chung chung.
-- [x] Form create/update cần validate frontend theo enum và rule số tiền/chỉ số trước khi gọi API.
-- [x] Invoice/payment cần có cơ chế nghe Real-time qua WebSocket (`/ws/realtime`) thay vì poll liên tục để cập nhật trạng thái PayOS.
-- [x] Webhook `/api/webhooks/payos` không gọi trực tiếp từ frontend trong production (do server PayOS tự gọi).
-- [x] Các màn danh sách nên có filter/search: tenants theo `keyword`/`status`, maintenance theo `status`, dashboard revenue theo `month`/`year`.
-- [x] Khi tạo invoice hàng tháng, đọc `createdInvoices`, `skippedRooms`, `errors` để báo kết quả rõ cho người dùng.
-- [x] Không hiển thị nút thao tác không hợp lệ: sửa/xóa meter reading khi invoice đã `PAID`, xóa/hủy invoice đã `PAID`, tạo payment cho invoice `CANCELLED`.
-- [x] Đã tích hợp Realtime `GLOBAL_UPDATE` để tự động làm mới giao diện mọi màn hình khi có dữ liệu bị thay đổi từ client khác.
+- [x] Thiết lập bộ xử lý gọi API dùng chung, tự động gắn tiêu đề xác thực (`Authorization Bearer`) ngay sau khi đăng nhập thành công.
+- [x] Xử lý đồng bộ dữ liệu trả về theo chuẩn `ApiResponse`: luôn đọc các trường `success`, `message`, `data`, `timestamp`.
+- [x] Với các lỗi hệ thống (400, 404, 500), ưu tiên hiển thị dòng thông báo lỗi (`message`) từ máy chủ trả về thay vì hiện thông báo lỗi chung chung.
+- [x] Trước khi gửi yêu cầu Thêm/Sửa, ứng dụng cần tự kiểm tra dữ liệu đầu vào (ví dụ: số tiền/chỉ số không được âm).
+- [x] Ứng dụng đã tích hợp công nghệ kết nối liên tục (WebSocket tại `/ws/realtime`) để tự động cập nhật trạng thái thanh toán PayOS mà không cần gọi API liên tục (không dùng cơ chế polling).
+- [x] Đường dẫn nhận thông báo (Webhook) của PayOS chỉ dành cho máy chủ PayOS gọi, ứng dụng giao diện tuyệt đối không được gọi trực tiếp.
+- [x] Các màn hình danh sách đã có đầy đủ bộ lọc tìm kiếm: lọc khách thuê theo từ khóa/trạng thái, lọc bảo trì theo trạng thái, lọc thống kê doanh thu theo tháng/năm.
+- [x] Khi tính năng tạo hóa đơn hàng loạt được kích hoạt, ứng dụng sẽ đọc và hiển thị rõ thông tin chi tiết: số hóa đơn thành công, số phòng bị bỏ qua, và các lỗi phát sinh.
+- [x] Không hiển thị các nút thao tác trái quy tắc: ẩn nút Sửa/Xóa số điện nước nếu hóa đơn đã được thanh toán, ẩn nút Xóa/Hủy hóa đơn đã thanh toán.
+- [x] Đã xử lý bắt sự kiện cập nhật toàn cầu (`GLOBAL_UPDATE`) qua WebSocket để làm mới giao diện tại mọi màn hình khi có dữ liệu bị thay đổi từ nơi khác.
 
----
-
-## 9. Ghi chú dùng nhanh cho frontend
-
-**Thứ tự tích hợp tối thiểu được khuyến nghị:**
-`Auth` -> `Dashboard` -> `Property/Room` -> `Service Price` -> `Tenant` -> `Contract` -> `Meter Reading` -> `Invoice` -> `Payment` -> `Maintenance`.
-
-*(Tài liệu này dùng làm sổ tay bàn giao và tham chiếu cho toàn bộ API đã phát triển trong hệ thống Quản Lý Trọ)*
+*(Tài liệu này dùng làm sổ tay tham chiếu chuẩn bằng tiếng Việt cho toàn bộ kiến trúc máy chủ và giao diện của Hệ thống Quản Lý Trọ)*
