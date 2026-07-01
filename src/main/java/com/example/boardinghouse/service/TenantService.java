@@ -120,7 +120,7 @@ public class TenantService {
         Tenant tenant = getTenantById(id);
         String ownerId = tenant.getOwnerId();
         TenantStatus status = request.getStatus() == null ? tenant.getStatus() : request.getStatus();
-        
+        String currentRoomId;
         // Cần kiểm tra xem khách thuê có hợp đồng đang hoạt động không nếu trạng thái đổi thành LEFT
         if (status == TenantStatus.LEFT && tenant.getStatus() != TenantStatus.LEFT) {
             ensureTenantHasNoActiveContract(id, tenant.getOwnerId());
