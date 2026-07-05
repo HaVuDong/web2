@@ -94,9 +94,7 @@ public class DashboardService {
      */
     public DashboardDebtsResponse getDebts() {
         String ownerId = currentUserService.getOwnerId();
-        List<Invoice> debtInvoices = invoiceRepository.findByOwnerId(ownerId).stream()
-                .filter(invoice -> DEBT_STATUSES.contains(invoice.getStatus()))
-                .toList();
+        List<Invoice> debtInvoices = invoiceRepository.findByOwnerIdAndStatusIn(ownerId, DEBT_STATUSES);
         Long totalDebt = debtInvoices.stream()
                 .mapToLong(invoice -> valueOrZero(invoice.getTotalAmount()))
                 .sum();
@@ -172,10 +170,7 @@ public class DashboardService {
      * Đếm tổng số lượng hóa đơn đang ở trạng thái nợ.
      */
     private long countDebtInvoices() {
-        String ownerId = currentUserService.getOwnerId();
-        return DEBT_STATUSES.stream()
-                .mapToLong(status -> invoiceRepository.findByOwnerIdAndStatus(ownerId, status).size())
-                .sum();
+        return invoiceRepository.countByOwnerIdAndStatusIn(currentUserService.getOwnerId(), DEBT_STATUSES);
     }
 
     /**

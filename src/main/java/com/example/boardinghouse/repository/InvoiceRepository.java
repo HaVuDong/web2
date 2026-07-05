@@ -41,4 +41,10 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 
     @Query("{'ownerId': ?0, 'status': ?1, 'deleted': {$ne: true}}")
     List<Invoice> findByOwnerIdAndStatus(String ownerId, InvoiceStatus status);
+
+    @Query("{'ownerId': ?0, 'status': {$in: ?1}, 'deleted': {$ne: true}}")
+    List<Invoice> findByOwnerIdAndStatusIn(String ownerId, java.util.Set<InvoiceStatus> statuses);
+
+    @Query(value = "{'ownerId': ?0, 'status': {$in: ?1}, 'deleted': {$ne: true}}", count = true)
+    long countByOwnerIdAndStatusIn(String ownerId, java.util.Set<InvoiceStatus> statuses);
 }
