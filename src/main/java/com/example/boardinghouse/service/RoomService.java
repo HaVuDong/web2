@@ -10,6 +10,7 @@ import com.example.boardinghouse.dto.room.UpdateRoomRequest;
 import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -27,6 +28,7 @@ public class RoomService {
     private final MongoTemplate mongoTemplate;
     private final CurrentUserService currentUserService;
     private final AuditService auditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy danh sách các phòng thuộc một tòa nhà/khu trọ cụ thể.
@@ -70,6 +72,7 @@ public class RoomService {
 
         Room saved = roomRepository.save(room);
         auditService.log("CREATE", "ROOM", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -110,6 +113,7 @@ public class RoomService {
 
         Room saved = roomRepository.save(room);
         auditService.log("UPDATE", "ROOM", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -126,6 +130,7 @@ public class RoomService {
         room.setStatus(status);
         Room saved = roomRepository.save(room);
         auditService.log("STATUS_CHANGE", "ROOM", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -153,6 +158,7 @@ public class RoomService {
         SoftDeleteHelper.markDeleted(room, room.getOwnerId());
         roomRepository.save(room);
         auditService.log("SOFT_DELETE", "ROOM", room.getId(), null, room);
+        realtimeEventPublisher.publishGlobalUpdate();
     }
 
     /**

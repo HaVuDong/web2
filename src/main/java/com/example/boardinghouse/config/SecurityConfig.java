@@ -99,7 +99,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/webhooks/payos").permitAll()
                 .requestMatchers("/ws/realtime").permitAll()
-                .requestMatchers("/api/test/**").hasAnyRole("OWNER")
                 .requestMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )

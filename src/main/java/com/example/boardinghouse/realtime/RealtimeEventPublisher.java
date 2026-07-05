@@ -2,6 +2,7 @@ package com.example.boardinghouse.realtime;
 
 import com.example.boardinghouse.domain.entity.Payment;
 import com.example.boardinghouse.domain.enums.InvoiceStatus;
+import com.example.boardinghouse.security.CurrentUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ public class RealtimeEventPublisher {
     public static final String GLOBAL_UPDATE = "GLOBAL_UPDATE";
 
     private final RealtimeWebSocketHandler realtimeWebSocketHandler;
+    private final CurrentUserService currentUserService;
 
     /**
      * Gửi thông báo cho tất cả client đang kết nối WebSocket về việc một khoản thanh toán vừa được cập nhật.
@@ -29,13 +31,15 @@ public class RealtimeEventPublisher {
                 invoiceStatus,
                 payment.getPaidAt()
         );
-        realtimeWebSocketHandler.broadcast(RealtimeEvent.of(PAYMENT_UPDATED, data));
+        String ownerId = currentUserService.getOwnerId();
+        realtimeWebSocketHandler.broadcastToOwner(RealtimeEvent.of(PAYMENT_UPDATED, data), ownerId);
     }
 
     /**
      * Gửi thông báo cho tất cả client để đồng bộ hóa dữ liệu (invalidate all queries).
      */
     public void publishGlobalUpdate() {
-        realtimeWebSocketHandler.broadcast(RealtimeEvent.of(GLOBAL_UPDATE, null));
+        String ownerId = currentUserService.getOwnerId();
+        realtimeWebSocketHandler.broadcastToOwner(RealtimeEvent.of(GLOBAL_UPDATE, null), ownerId);
     }
 }

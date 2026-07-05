@@ -25,6 +25,7 @@ import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.ServicePriceRepository;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +47,7 @@ public class InvoiceService {
     private final PaymentRepository paymentRepository;
     private final CurrentUserService currentUserService;
     private final AuditService auditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy danh sách toàn bộ hóa đơn.
@@ -109,6 +111,10 @@ public class InvoiceService {
                     }
                 });
 
+        if (!createdInvoices.isEmpty()) {
+            realtimeEventPublisher.publishGlobalUpdate();
+        }
+
         return MonthlyInvoiceGenerationResponse.builder()
                 .createdInvoices(createdInvoices)
                 .skippedRooms(skippedRooms)
@@ -162,6 +168,7 @@ public class InvoiceService {
 
         Invoice saved = invoiceRepository.save(invoice);
         auditService.log("UPDATE", "INVOICE", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -177,6 +184,7 @@ public class InvoiceService {
         SoftDeleteHelper.markDeleted(invoice, currentUserService.getOwnerId());
         invoiceRepository.save(invoice);
         auditService.log("SOFT_DELETE", "INVOICE", invoice.getId(), null, invoice);
+        realtimeEventPublisher.publishGlobalUpdate();
     }
 
     /**
@@ -196,6 +204,7 @@ public class InvoiceService {
         invoice.setPaidAt(LocalDateTime.now());
         Invoice saved = invoiceRepository.save(invoice);
         auditService.log("PAY", "INVOICE", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -213,6 +222,7 @@ public class InvoiceService {
         
         Invoice saved = invoiceRepository.save(invoice);
         auditService.log("CANCEL", "INVOICE", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -288,6 +298,7 @@ public class InvoiceService {
 
         Invoice saved = invoiceRepository.save(invoice);
         auditService.log("CREATE", "INVOICE", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 

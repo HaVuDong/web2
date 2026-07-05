@@ -9,6 +9,7 @@ import com.example.boardinghouse.dto.tenant.UpdateTenantRequest;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -28,6 +29,7 @@ public class TenantService {
     private final RoomRepository roomRepository;
     private final MongoTemplate mongoTemplate;
     private final CurrentUserService currentUserService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy danh sách khách thuê trọ dựa trên từ khóa tìm kiếm (tên, số điện thoại) và trạng thái.
@@ -93,7 +95,9 @@ public class TenantService {
                 .note(request.getNote())
                 .build();
 
-        return tenantRepository.save(tenant);
+        Tenant saved = tenantRepository.save(tenant);
+        realtimeEventPublisher.publishGlobalUpdate();
+        return saved;
     }
 
     /**
@@ -139,7 +143,9 @@ public class TenantService {
         tenant.setStatus(status);
         tenant.setNote(request.getNote());
 
-        return tenantRepository.save(tenant);
+        Tenant saved = tenantRepository.save(tenant);
+        realtimeEventPublisher.publishGlobalUpdate();
+        return saved;
     }
 
     /**
@@ -158,6 +164,7 @@ public class TenantService {
         tenant.setStatus(TenantStatus.LEFT);
         tenant.setCurrentRoomId(null);
         tenantRepository.save(tenant);
+        realtimeEventPublisher.publishGlobalUpdate();
     }
 
     /**

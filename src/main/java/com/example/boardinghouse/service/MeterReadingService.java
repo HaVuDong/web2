@@ -9,6 +9,7 @@ import com.example.boardinghouse.dto.meterreading.UpdateMeterReadingRequest;
 import com.example.boardinghouse.repository.MeterReadingRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -26,6 +27,7 @@ public class MeterReadingService {
     private final MongoTemplate mongoTemplate;
     private final CurrentUserService currentUserService;
     private final AuditService auditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy danh sách toàn bộ chỉ số điện nước của tất cả các phòng.
@@ -69,6 +71,7 @@ public class MeterReadingService {
 
         MeterReading saved = meterReadingRepository.save(meterReading);
         auditService.log("CREATE", "METER_READING", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -119,6 +122,7 @@ public class MeterReadingService {
 
         MeterReading saved = meterReadingRepository.save(meterReading);
         auditService.log("UPDATE", "METER_READING", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -131,6 +135,7 @@ public class MeterReadingService {
         SoftDeleteHelper.markDeleted(meterReading, currentUserService.getOwnerId());
         meterReadingRepository.save(meterReading);
         auditService.log("SOFT_DELETE", "METER_READING", meterReading.getId(), null, meterReading);
+        realtimeEventPublisher.publishGlobalUpdate();
     }
 
     /**

@@ -8,6 +8,7 @@ import com.example.boardinghouse.dto.property.CreatePropertyRequest;
 import com.example.boardinghouse.dto.property.UpdatePropertyRequest;
 import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -24,6 +25,7 @@ public class PropertyService {
     private final MongoTemplate mongoTemplate;
     private final CurrentUserService currentUserService;
     private final AuditService auditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy danh sách tất cả các tòa nhà/khu trọ trong hệ thống.
@@ -61,6 +63,7 @@ public class PropertyService {
 
         Property saved = propertyRepository.save(property);
         auditService.log("CREATE", "PROPERTY", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -80,6 +83,7 @@ public class PropertyService {
 
         Property saved = propertyRepository.save(property);
         auditService.log("UPDATE", "PROPERTY", saved.getId(), before, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -103,5 +107,6 @@ public class PropertyService {
         SoftDeleteHelper.markDeleted(property, currentUserService.getOwnerId());
         propertyRepository.save(property);
         auditService.log("SOFT_DELETE", "PROPERTY", property.getId(), null, property);
+        realtimeEventPublisher.publishGlobalUpdate();
     }
 }

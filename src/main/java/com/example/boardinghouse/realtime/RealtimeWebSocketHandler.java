@@ -34,6 +34,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final JwtUtils jwtUtils;
     private final CustomUserDetailsService userDetailsService;
     private final Map<String, WebSocketSession> authenticatedSessions = new ConcurrentHashMap<>();
+    private final Map<String, String> sessionOwnerIds = new ConcurrentHashMap<>();
 
     /**
      * Nhận và xử lý tin nhắn dạng Text từ client gửi lên.
@@ -52,11 +53,13 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         authenticatedSessions.remove(session.getId());
+        sessionOwnerIds.remove(session.getId());
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
         authenticatedSessions.remove(session.getId());
+        sessionOwnerIds.remove(session.getId());
         if (session.isOpen()) {
             session.close(CloseStatus.SERVER_ERROR);
         }
@@ -66,6 +69,13 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
      * Gửi (broadcast) một sự kiện đến toàn bộ các client đang kết nối thành công.
      */
     public void broadcast(RealtimeEvent<?> event) {
+        broadcastToOwner(event, null);
+    }
+
+    /**
+     * Gửi (broadcast) một sự kiện chỉ đến các client của một ownerId cụ thể.
+     */
+    public void broadcastToOwner(RealtimeEvent<?> event, String targetOwnerId) {
         final String payload;
         try {
             payload = objectMapper.writeValueAsString(event);
@@ -75,14 +85,23 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         }
 
         authenticatedSessions.forEach((sessionId, session) -> {
+            if (targetOwnerId != null) {
+                String sessionOwnerId = sessionOwnerIds.get(sessionId);
+                if (sessionOwnerId == null || !sessionOwnerId.equals(targetOwnerId)) {
+                    return; // Skip this session because it doesn't belong to the target owner
+                }
+            }
+
             try {
                 if (session.isOpen()) {
                     session.sendMessage(new TextMessage(payload));
                 } else {
                     authenticatedSessions.remove(sessionId);
+                    sessionOwnerIds.remove(sessionId);
                 }
             } catch (IOException exception) {
                 authenticatedSessions.remove(sessionId);
+                sessionOwnerIds.remove(sessionId);
                 closeQuietly(session, CloseStatus.SERVER_ERROR);
                 log.warn("Unable to send realtime event to session {}", sessionId, exception);
             }
@@ -123,6 +142,12 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                     BUFFER_SIZE_LIMIT_BYTES
             );
             authenticatedSessions.put(session.getId(), safeSession);
+            
+            // Note: Assuming userDetails is instance of CustomUserDetails, we extract the owner ID
+            if (userDetails instanceof com.example.boardinghouse.security.CustomUserDetails customUserDetails) {
+                sessionOwnerIds.put(session.getId(), customUserDetails.getUser().getId());
+            }
+
             safeSession.sendMessage(new TextMessage(
                     objectMapper.writeValueAsString(Map.of("type", "AUTHENTICATED"))
             ));

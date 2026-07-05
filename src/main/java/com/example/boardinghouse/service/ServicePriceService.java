@@ -6,6 +6,7 @@ import com.example.boardinghouse.dto.serviceprice.UpdateServicePriceRequest;
 import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.repository.ServicePriceRepository;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +21,7 @@ public class ServicePriceService {
     private final ServicePriceRepository servicePriceRepository;
     private final PropertyRepository propertyRepository;
     private final CurrentUserService currentUserService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy bảng giá dịch vụ của một tòa nhà.
@@ -51,7 +53,9 @@ public class ServicePriceService {
         servicePrice.setGarbageFee(request.getGarbageFee());
         servicePrice.setParkingFee(request.getParkingFee());
 
-        return servicePriceRepository.save(servicePrice);
+        ServicePrice saved = servicePriceRepository.save(servicePrice);
+        realtimeEventPublisher.publishGlobalUpdate();
+        return saved;
     }
 
     /**

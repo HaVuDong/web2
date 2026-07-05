@@ -11,6 +11,7 @@ import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
 import com.example.boardinghouse.common.exception.BadRequestException;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +27,7 @@ public class MaintenanceService {
     private final TenantRepository tenantRepository;
     private final CurrentUserService currentUserService;
     private final AuditService auditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy danh sách yêu cầu bảo trì. Nếu truyền vào trạng thái, sẽ lọc theo trạng thái đó.
@@ -65,6 +67,7 @@ public class MaintenanceService {
 
         MaintenanceRequest saved = maintenanceRepository.save(maintenanceRequest);
         auditService.log("CREATE", "MAINTENANCE", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -100,6 +103,7 @@ public class MaintenanceService {
 
         MaintenanceRequest saved = maintenanceRepository.save(maintenanceRequest);
         auditService.log("UPDATE", "MAINTENANCE", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -125,6 +129,7 @@ public class MaintenanceService {
         maintenanceRequest.setCompletedAt(status == MaintenanceStatus.DONE ? LocalDateTime.now() : null);
         MaintenanceRequest saved = maintenanceRepository.save(maintenanceRequest);
         auditService.log("STATUS_CHANGE", "MAINTENANCE", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -139,6 +144,7 @@ public class MaintenanceService {
         SoftDeleteHelper.markDeleted(maintenanceRequest, currentUserService.getOwnerId());
         maintenanceRepository.save(maintenanceRequest);
         auditService.log("SOFT_DELETE", "MAINTENANCE", maintenanceRequest.getId(), null, maintenanceRequest);
+        realtimeEventPublisher.publishGlobalUpdate();
     }
 
     /**

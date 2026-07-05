@@ -69,6 +69,13 @@ public class MongoIndexConfig {
 
 
 
+        // 6. AuditLog: Tự động xóa sau 90 ngày để tránh đầy Database (TTL Index)
+        mongoTemplate.indexOps(AuditLog.class).ensureIndex(
+                new Index()
+                        .on("createdAt", Sort.Direction.ASC)
+                        .expire(90, java.util.concurrent.TimeUnit.DAYS)
+        );
+
         log.info("MongoDB Indexes đã được khởi tạo thành công.");
     }
 }

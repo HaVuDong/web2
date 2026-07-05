@@ -16,6 +16,7 @@ import com.example.boardinghouse.repository.ContractRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
 import com.example.boardinghouse.security.CurrentUserService;
+import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +36,7 @@ public class ContractService {
     private final TenantRepository tenantRepository;
     private final CurrentUserService currentUserService;
     private final AuditService auditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     /**
      * Lấy danh sách toàn bộ hợp đồng thuê phòng.
@@ -96,6 +98,7 @@ public class ContractService {
             throw new RuntimeException("Failed to save room or tenants during contract creation, rolled back contract.", e);
         }
 
+        realtimeEventPublisher.publishGlobalUpdate();
         return savedContract;
     }
 
@@ -135,6 +138,7 @@ public class ContractService {
 
         Contract saved = contractRepository.save(contract);
         auditService.log("UPDATE", "CONTRACT", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
@@ -178,6 +182,7 @@ public class ContractService {
         });
         tenantRepository.saveAll(tenants);
 
+        realtimeEventPublisher.publishGlobalUpdate();
         return savedContract;
     }
 
@@ -216,6 +221,7 @@ public class ContractService {
 
         Contract saved = contractRepository.save(contract);
         auditService.log("RENEW", "CONTRACT", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
         return saved;
     }
 
