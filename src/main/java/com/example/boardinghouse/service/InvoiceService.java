@@ -69,7 +69,8 @@ public class InvoiceService {
                 request.getYear(),
                 valueOrZero(request.getOtherFees()),
                 valueOrZero(request.getDiscountAmount()),
-                request.getNote()
+                request.getNote(),
+                null
         );
     }
 
@@ -90,11 +91,17 @@ public class InvoiceService {
         List<String> skippedRooms = new ArrayList<>();
         List<String> errors = new ArrayList<>();
 
+        ServicePrice propertyServicePrice = servicePriceRepository.findByPropertyIdAndOwnerId(request.getPropertyId(), ownerId)
+                .orElse(null);
+
         roomRepository.findByPropertyIdAndOwnerId(request.getPropertyId(), ownerId).stream()
                 .filter(room -> room.getStatus() == RoomStatus.OCCUPIED)
                 .forEach(room -> {
                     try {
-                        Invoice invoice = createInvoice(room.getId(), request.getMonth(), request.getYear(), 0L, 0L, null);
+                        if (propertyServicePrice == null) {
+                            throw new ResourceNotFoundException("Service price not found for property id: " + request.getPropertyId());
+                        }
+                        Invoice invoice = createInvoice(room.getId(), request.getMonth(), request.getYear(), 0L, 0L, null, propertyServicePrice);
                         createdInvoices.add(invoice);
                     } catch (BadRequestException | ResourceNotFoundException ex) {
                         skippedRooms.add(room.getId());
@@ -214,10 +221,6 @@ public class InvoiceService {
      */
     public List<Invoice> getInvoicesByRoomId(String roomId) {
         String ownerId = currentUserService.getOwnerId();
-        if (roomRepository.findByIdAndOwnerId(roomId, ownerId).isEmpty()) {
-            throw new ResourceNotFoundException("Room not found with id: " + roomId);
-        }
-
         return invoiceRepository.findByRoomIdAndOwnerId(roomId, ownerId);
     }
 
@@ -226,14 +229,17 @@ public class InvoiceService {
      * Lấy thông tin hợp đồng, bảng giá dịch vụ, và số điện nước đã chốt để tính toán thành tiền.
      * Đảm bảo không tạo trùng hóa đơn trong cùng một tháng.
      */
-    private Invoice createInvoice(String roomId, Integer month, Integer year, Long otherFees, Long discountAmount, String note) {
+    private Invoice createInvoice(String roomId, Integer month, Integer year, Long otherFees, Long discountAmount, String note, ServicePrice providedServicePrice) {
         String ownerId = currentUserService.getOwnerId();
         Room room = roomRepository.findByIdAndOwnerId(roomId, ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId));
         Contract contract = contractRepository.findByRoomIdAndOwnerIdAndStatus(roomId, ownerId, ContractStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("Active contract not found for room id: " + roomId));
-        ServicePrice servicePrice = servicePriceRepository.findByPropertyIdAndOwnerId(room.getPropertyId(), ownerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Service price not found for property id: " + room.getPropertyId()));
+        
+        ServicePrice servicePrice = providedServicePrice != null ? providedServicePrice 
+                : servicePriceRepository.findByPropertyIdAndOwnerId(room.getPropertyId(), ownerId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Service price not found for property id: " + room.getPropertyId()));
+        
         MeterReading meterReading = meterReadingRepository.findByRoomIdAndOwnerIdAndMonthAndYear(roomId, ownerId, month, year)
                 .orElseThrow(() -> new ResourceNotFoundException("Meter reading not found for room and month"));
 

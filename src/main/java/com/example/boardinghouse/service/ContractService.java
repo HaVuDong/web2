@@ -82,14 +82,19 @@ public class ContractService {
         Contract savedContract = contractRepository.save(contract);
         auditService.log("CREATE", "CONTRACT", savedContract.getId(), null, savedContract);
 
-        room.setStatus(RoomStatus.OCCUPIED);
-        roomRepository.save(room);
+        try {
+            room.setStatus(RoomStatus.OCCUPIED);
+            roomRepository.save(room);
 
-        tenants.forEach(tenant -> {
-            tenant.setCurrentRoomId(room.getId());
-            tenant.setStatus(TenantStatus.ACTIVE);
-        });
-        tenantRepository.saveAll(tenants);
+            tenants.forEach(tenant -> {
+                tenant.setCurrentRoomId(room.getId());
+                tenant.setStatus(TenantStatus.ACTIVE);
+            });
+            tenantRepository.saveAll(tenants);
+        } catch (Exception e) {
+            contractRepository.deleteById(savedContract.getId());
+            throw new RuntimeException("Failed to save room or tenants during contract creation, rolled back contract.", e);
+        }
 
         return savedContract;
     }
@@ -269,10 +274,7 @@ public class ContractService {
     }
 
     private void ensureTenantsHaveNoActiveContract(List<String> tenantIds, String ownerId) {
-        boolean hasActiveContract = contractRepository.findByOwnerId(ownerId).stream()
-                .filter(contract -> contract.getStatus() == ContractStatus.ACTIVE)
-                .flatMap(contract -> contract.getTenantIds().stream())
-                .anyMatch(tenantIds::contains);
+        boolean hasActiveContract = contractRepository.existsByOwnerIdAndStatusAndTenantIdsIn(ownerId, ContractStatus.ACTIVE, tenantIds);
         if (hasActiveContract) {
             throw new BadRequestException("Tenant already has an active contract");
         }

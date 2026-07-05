@@ -29,4 +29,7 @@ public interface ContractRepository extends MongoRepository<Contract, String> {
 
     @Query(value = "{'roomId': ?0, 'ownerId': ?1, 'status': ?2, 'deleted': {$ne: true}}", exists = true)
     boolean existsByRoomIdAndOwnerIdAndStatus(String roomId, String ownerId, ContractStatus status);
+
+    @Query(value = "{'ownerId': ?0, 'status': ?1, 'tenantIds': {$in: ?2}, 'deleted': {$ne: true}}", exists = true)
+    boolean existsByOwnerIdAndStatusAndTenantIdsIn(String ownerId, ContractStatus status, List<String> tenantIds);
 }
