@@ -23,7 +23,6 @@ public class PayosWebhookRequest {
     @NotBlank(message = "Webhook desc is required")
     private String desc;
 
-    @NotNull(message = "Webhook success flag is required")
     private Boolean success;
 
     private Map<String, Object> data;
