@@ -42,6 +42,7 @@ public class GlobalExceptionHandler {
             String errorMessage = error.getDefaultMessage();
             errors.put(fieldName, errorMessage);
         });
+        System.err.println("Validation failed: " + errors);
         return ApiResponse.error("Validation failed: " + errors.toString());
     }
 

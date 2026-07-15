@@ -26,7 +26,6 @@ public class PayosWebhookRequest {
     @NotNull(message = "Webhook success flag is required")
     private Boolean success;
 
-    @NotNull(message = "Webhook data is required")
     private Map<String, Object> data;
 
     @NotBlank(message = "Webhook signature is required")

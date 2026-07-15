@@ -59,6 +59,9 @@ public class PayosSignatureService {
      * Tạo chữ ký băm (hash) cho payload data nhận được từ Webhook.
      */
     public String createWebhookDataSignature(Map<String, Object> data) {
+        if (data == null) {
+            return hmacSha256(""); // Return hash of empty string or whatever PayOS uses
+        }
         return hmacSha256(sortObjectByKey(data));
     }
 

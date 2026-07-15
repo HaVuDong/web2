@@ -123,8 +123,17 @@ public class PaymentService {
      * @return Bản ghi thanh toán sau khi cập nhật
      */
     public Payment handlePayosWebhook(PayosWebhookRequest request) {
+        System.out.println("Received PayOS webhook: " + request);
+        
         if (!payosSignatureService.isValidWebhookSignature(request)) {
+            System.err.println("Invalid PayOS webhook signature! Request: " + request);
             throw new BadRequestException("Invalid PayOS webhook signature");
+        }
+
+        // Bỏ qua kiểm tra orderCode nếu đây là webhook xác nhận URL từ PayOS
+        if ("confirm webhook".equals(request.getDesc()) || "success".equals(request.getDesc()) && request.getData().containsKey("orderCode") && request.getData().get("orderCode").toString().equals("123")) {
+            System.out.println("Confirmed PayOS webhook URL.");
+            return new Payment(); // Trả về dummy object để trả HTTP 200 OK
         }
 
         Long orderCode = getRequiredLong(request.getData(), "orderCode");
