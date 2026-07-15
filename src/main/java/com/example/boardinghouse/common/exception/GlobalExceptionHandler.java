@@ -49,7 +49,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Object> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
-        return ApiResponse.error("Invalid request body");
+        ex.printStackTrace();
+        return ApiResponse.error("Invalid request body: " + ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -73,8 +74,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Object> handleGlobalException(Exception ex) {
-        // Log the exception in real app
-        // log.error("Unhandled exception", ex);
+        ex.printStackTrace();
         if (includeErrorDetails) {
             return ApiResponse.error("An unexpected error occurred: " + ex.getMessage());
         }
