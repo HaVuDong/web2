@@ -190,6 +190,7 @@ public class MeterReadingService {
                         .and("ownerId").is(meterReading.getOwnerId())
                         .and("month").is(meterReading.getMonth())
                         .and("year").is(meterReading.getYear())
+                        .and("status").ne("CANCELLED")
                         .and("deleted").ne(true)),
                 "invoices"
         );
