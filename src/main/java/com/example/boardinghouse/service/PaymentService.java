@@ -53,7 +53,7 @@ public class PaymentService {
      * @param invoiceId ID của hóa đơn cần thanh toán
      * @return Thông tin link thanh toán
      */
-    public PaymentLinkResponse createPaymentLink(String invoiceId) {
+    public PaymentLinkResponse createPaymentLink(String invoiceId, String returnUrl, String cancelUrl) {
         String ownerId = currentUserService.getOwnerId();
         Invoice invoice = invoiceRepository.findByIdAndOwnerId(invoiceId, ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + invoiceId));
@@ -68,7 +68,7 @@ public class PaymentService {
 
         return paymentRepository.findFirstByInvoiceIdAndOwnerIdAndStatus(invoiceId, ownerId, PaymentStatus.PENDING)
                 .map(PaymentLinkResponse::from)
-                .orElseGet(() -> createNewPaymentLink(invoiceId, invoice));
+                .orElseGet(() -> createNewPaymentLink(invoiceId, invoice, returnUrl, cancelUrl));
     }
 
     /**
@@ -79,19 +79,22 @@ public class PaymentService {
      * @param invoice Thông tin hóa đơn
      * @return Thông tin link thanh toán từ PayOS
      */
-    private PaymentLinkResponse createNewPaymentLink(String invoiceId, Invoice invoice) {
+    private PaymentLinkResponse createNewPaymentLink(String invoiceId, Invoice invoice, String returnUrl, String cancelUrl) {
         Long amount = invoice.getTotalAmount();
         if (amount == null || amount <= 0) {
             throw new BadRequestException("Invoice amount must be greater than 0");
         }
 
         Long orderCode = generateUniqueOrderCode();
+        String finalReturnUrl = (returnUrl != null && !returnUrl.isBlank()) ? returnUrl : payosProperties.getReturnUrl();
+        String finalCancelUrl = (cancelUrl != null && !cancelUrl.isBlank()) ? cancelUrl : payosProperties.getCancelUrl();
+
         PayosCreatePaymentLinkRequest payosRequest = PayosCreatePaymentLinkRequest.builder()
                 .orderCode(orderCode)
                 .amount(amount)
                 .description(buildPaymentDescription(orderCode))
-                .returnUrl(payosProperties.getReturnUrl())
-                .cancelUrl(payosProperties.getCancelUrl())
+                .returnUrl(finalReturnUrl)
+                .cancelUrl(finalCancelUrl)
                 .build();
         PayosCreatePaymentLinkResponse payosResponse = payosGateway.createPaymentLink(payosRequest);
 

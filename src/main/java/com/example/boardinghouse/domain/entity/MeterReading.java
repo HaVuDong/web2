@@ -51,6 +51,9 @@ public class MeterReading implements SoftDeletable {
 
     private String note;
 
+    /** null = owner nhập, có giá trị = tenant tự nhập */
+    private String submittedByTenantId;
+
     @CreatedDate
     private LocalDateTime createdAt;
 

@@ -47,6 +47,25 @@ public class EmailService {
         sendEmail(toEmail, subject, htmlContent);
     }
 
+    public void sendMeterReadingReminderEmail(String toEmail, String tenantName, int month, int year) {
+        String subject = String.format("Nhắc nhở nhập chỉ số điện nước tháng %d/%d", month, year);
+        String htmlContent = String.format("""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                <h2 style="color: #7C3AED;">Xin chào %s,</h2>
+                <p>Đã đến thời điểm nhập chỉ số điện nước cho <b>tháng %d/%d</b>.</p>
+                <div style="background-color: #fef3c7; padding: 15px; border-radius: 6px; margin: 15px 0; border-left: 4px solid #f59e0b;">
+                    <p style="margin: 5px 0; font-weight: bold; color: #b45309;">⏰ Hạn chót: Trước ngày 5/%d/%d</p>
+                    <p style="margin: 5px 0; color: #92400e;">Vui lòng đăng nhập vào ứng dụng và nhập chỉ số điện nước mới cho phòng của bạn.</p>
+                </div>
+                <p>Nếu bạn không nhập trước hạn, chủ trọ sẽ tự nhập chỉ số thay cho bạn.</p>
+                <br>
+                <p>Trân trọng,<br><strong>Ban Quản Lý Trọ</strong></p>
+            </div>
+            """, tenantName, month, year, month, year);
+
+        sendEmail(toEmail, subject, htmlContent);
+    }
+
     private void sendEmail(String to, String subject, String html) {
         try {
             HttpHeaders headers = new HttpHeaders();

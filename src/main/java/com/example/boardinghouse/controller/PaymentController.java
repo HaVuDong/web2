@@ -29,8 +29,12 @@ public class PaymentController {
      * Endpoint: POST /api/invoices/{invoiceId}/payment-link
      */
     @PostMapping("/invoices/{invoiceId}/payment-link")
-    public ApiResponse<PaymentLinkResponse> createPaymentLink(@PathVariable String invoiceId) {
-        PaymentLinkResponse response = paymentService.createPaymentLink(invoiceId);
+    public ApiResponse<PaymentLinkResponse> createPaymentLink(
+            @PathVariable String invoiceId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String returnUrl,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String cancelUrl
+    ) {
+        PaymentLinkResponse response = paymentService.createPaymentLink(invoiceId, returnUrl, cancelUrl);
         return ApiResponse.success("Payment link created successfully", response);
     }
 

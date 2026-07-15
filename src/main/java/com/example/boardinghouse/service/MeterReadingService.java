@@ -198,4 +198,88 @@ public class MeterReadingService {
             throw new BadRequestException("Cannot edit or delete meter reading because an invoice already exists for this month. Please delete the invoice first.");
         }
     }
+
+    // ═══════════════════════════════════════════════
+    // TENANT SELF-SERVICE METER READING
+    // ═══════════════════════════════════════════════
+
+    /**
+     * Khách thuê tự ghi chỉ số điện nước mới cho phòng mình đang ở.
+     * - Tự động lấy roomId từ phòng tenant đang ở.
+     * - Tự động lấy số cũ (electricityOld, waterOld) từ chỉ số tháng trước.
+     * - Kiểm tra hạn chót: phải nhập trước ngày 5 của tháng.
+     * - Đánh dấu submittedByTenantId để phân biệt với owner nhập.
+     */
+    public MeterReading createTenantMeterReading(
+            com.example.boardinghouse.dto.meterreading.TenantMeterReadingRequest request,
+            com.example.boardinghouse.domain.entity.Tenant tenant
+    ) {
+        // Kiểm tra tenant có phòng hiện tại không
+        String roomId = tenant.getCurrentRoomId();
+        if (roomId == null || roomId.isBlank()) {
+            throw new BadRequestException("Bạn chưa được gán phòng. Vui lòng liên hệ chủ trọ.");
+        }
+
+        String ownerId = tenant.getOwnerId();
+
+        // Kiểm tra deadline: phải nhập trước ngày 5 của tháng nhập
+        java.time.LocalDate today = java.time.LocalDate.now();
+        if (request.getMonth() == today.getMonthValue() && request.getYear() == today.getYear()) {
+            if (today.getDayOfMonth() > 5) {
+                throw new BadRequestException("Đã quá hạn nhập chỉ số. Hạn chót là ngày 5 hàng tháng. Vui lòng liên hệ chủ trọ.");
+            }
+        }
+
+        // Tự động lấy số cũ từ tháng trước
+        int prevMonth = request.getMonth() - 1;
+        int prevYear = request.getYear();
+        if (prevMonth == 0) {
+            prevMonth = 12;
+            prevYear -= 1;
+        }
+        long electricityOld = 0;
+        long waterOld = 0;
+        java.util.Optional<MeterReading> prevReading =
+                meterReadingRepository.findByRoomIdAndOwnerIdAndMonthAndYear(roomId, ownerId, prevMonth, prevYear);
+        if (prevReading.isPresent()) {
+            electricityOld = prevReading.get().getElectricityNew();
+            waterOld = prevReading.get().getWaterNew();
+        }
+
+        // Validate số mới >= số cũ
+        validateReadingValues(electricityOld, request.getElectricityNew(), waterOld, request.getWaterNew());
+
+        // Kiểm tra trùng lặp
+        ensureNoDuplicate(roomId, ownerId, request.getMonth(), request.getYear(), null);
+
+        MeterReading meterReading = MeterReading.builder()
+                .ownerId(ownerId)
+                .roomId(roomId)
+                .month(request.getMonth())
+                .year(request.getYear())
+                .electricityOld(electricityOld)
+                .electricityNew(request.getElectricityNew())
+                .waterOld(waterOld)
+                .waterNew(request.getWaterNew())
+                .note(request.getNote())
+                .submittedByTenantId(tenant.getId())
+                .build();
+
+        MeterReading saved = meterReadingRepository.save(meterReading);
+        auditService.log("CREATE", "METER_READING", saved.getId(), null, saved);
+        realtimeEventPublisher.publishGlobalUpdate();
+        return saved;
+    }
+
+    /**
+     * Lấy lịch sử chỉ số điện nước của phòng mà tenant đang ở.
+     */
+    public List<MeterReading> getTenantMeterReadings(com.example.boardinghouse.domain.entity.Tenant tenant) {
+        String roomId = tenant.getCurrentRoomId();
+        if (roomId == null || roomId.isBlank()) {
+            return List.of();
+        }
+        return meterReadingRepository.findByRoomIdAndOwnerIdOrderByYearDescMonthDesc(roomId, tenant.getOwnerId());
+    }
 }
+

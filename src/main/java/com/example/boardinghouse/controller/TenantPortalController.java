@@ -2,16 +2,22 @@ package com.example.boardinghouse.controller;
 
 import com.example.boardinghouse.common.dto.ApiResponse;
 import com.example.boardinghouse.domain.entity.Invoice;
+import com.example.boardinghouse.domain.entity.MeterReading;
 import com.example.boardinghouse.domain.entity.Tenant;
+import com.example.boardinghouse.dto.meterreading.TenantMeterReadingRequest;
 import com.example.boardinghouse.security.CurrentUserService;
 import com.example.boardinghouse.service.InvoiceService;
+import com.example.boardinghouse.service.MeterReadingService;
 import com.example.boardinghouse.service.TenantService;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.PropertyRepository;
 import com.example.boardinghouse.domain.entity.Room;
 import com.example.boardinghouse.domain.entity.Property;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,6 +35,7 @@ public class TenantPortalController {
 
     private final TenantService tenantService;
     private final InvoiceService invoiceService;
+    private final MeterReadingService meterReadingService;
     private final CurrentUserService currentUserService;
     private final RoomRepository roomRepository;
     private final PropertyRepository propertyRepository;
@@ -93,4 +100,31 @@ public class TenantPortalController {
         info.put("property", property);
         return ApiResponse.success(info);
     }
+
+    /**
+     * API: Lấy lịch sử chỉ số điện nước của phòng mà khách thuê đang ở.
+     * Endpoint: GET /api/tenant/meter-readings
+     */
+    @GetMapping("/meter-readings")
+    public ApiResponse<List<MeterReading>> getMyMeterReadings() {
+        String tenantId = currentUserService.getTenantId();
+        Tenant tenant = tenantService.getTenantById(tenantId);
+        List<MeterReading> readings = meterReadingService.getTenantMeterReadings(tenant);
+        return ApiResponse.success(readings);
+    }
+
+    /**
+     * API: Khách thuê tự ghi chỉ số điện nước mới cho phòng mình đang ở.
+     * Chỉ cần nhập số mới (electricityNew, waterNew), số cũ tự động lấy từ tháng trước.
+     * Hạn chót nhập: trước ngày 5 hàng tháng.
+     * Endpoint: POST /api/tenant/meter-readings
+     */
+    @PostMapping("/meter-readings")
+    public ApiResponse<MeterReading> submitMeterReading(@Valid @RequestBody TenantMeterReadingRequest request) {
+        String tenantId = currentUserService.getTenantId();
+        Tenant tenant = tenantService.getTenantById(tenantId);
+        MeterReading reading = meterReadingService.createTenantMeterReading(request, tenant);
+        return ApiResponse.success("Ghi chỉ số thành công", reading);
+    }
 }
+
