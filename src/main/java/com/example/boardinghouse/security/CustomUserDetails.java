@@ -1,7 +1,9 @@
 package com.example.boardinghouse.security;
 
+import com.example.boardinghouse.domain.entity.Tenant;
 import com.example.boardinghouse.domain.entity.User;
-import lombok.AllArgsConstructor;
+import com.example.boardinghouse.domain.enums.TenantStatus;
+import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -9,27 +11,49 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.Collections;
 
-/**
- * Lớp bọc (wrapper) cho thực thể User để cung cấp thông tin cho Spring Security.
- * Implement giao diện UserDetails của Spring Security.
- */
-@AllArgsConstructor
 public class CustomUserDetails implements UserDetails {
+    @Getter
     private final User user;
+    
+    @Getter
+    private final Tenant tenant;
+
+    private final String username;
+    private final String password;
+    private final Collection<? extends GrantedAuthority> authorities;
+    private final boolean isActive;
+
+    public CustomUserDetails(User user) {
+        this.user = user;
+        this.tenant = null;
+        this.username = user.getEmail();
+        this.password = user.getPasswordHash();
+        this.authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+        this.isActive = user.isActive();
+    }
+
+    public CustomUserDetails(Tenant tenant) {
+        this.user = null;
+        this.tenant = tenant;
+        this.username = tenant.getEmail();
+        this.password = tenant.getPasswordHash();
+        this.authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_TENANT"));
+        this.isActive = tenant.getStatus() == TenantStatus.ACTIVE && !Boolean.TRUE.equals(tenant.getDeleted());
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+        return authorities;
     }
 
     @Override
     public String getPassword() {
-        return user.getPasswordHash();
+        return password;
     }
 
     @Override
     public String getUsername() {
-        return user.getEmail();
+        return username;
     }
 
     @Override
@@ -49,10 +73,6 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return user.isActive();
-    }
-
-    public User getUser() {
-        return user;
+        return isActive;
     }
 }

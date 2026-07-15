@@ -253,7 +253,7 @@ public class InvoiceService {
         MeterReading meterReading = meterReadingRepository.findByRoomIdAndOwnerIdAndMonthAndYear(roomId, ownerId, month, year)
                 .orElseThrow(() -> new ResourceNotFoundException("Meter reading not found for room and month"));
 
-        invoiceRepository.findByRoomIdAndOwnerIdAndMonthAndYear(roomId, ownerId, month, year)
+        invoiceRepository.findActiveByRoomIdAndOwnerIdAndMonthAndYear(roomId, ownerId, month, year)
                 .ifPresent(invoice -> {
                     throw new BadRequestException("Invoice already exists for this room and month");
                 });

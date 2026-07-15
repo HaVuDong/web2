@@ -37,6 +37,8 @@ public class Tenant implements SoftDeletable {
 
     private String email;
 
+    private String passwordHash;
+
     private String identityNumber;
 
     private LocalDate dateOfBirth;

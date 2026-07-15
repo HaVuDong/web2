@@ -4,8 +4,10 @@ import com.example.boardinghouse.common.dto.ApiResponse;
 import com.example.boardinghouse.domain.entity.Contract;
 import com.example.boardinghouse.dto.contract.CreateContractRequest;
 import com.example.boardinghouse.dto.contract.RenewContractRequest;
+import com.example.boardinghouse.dto.contract.SwitchRoomRequest;
 import com.example.boardinghouse.dto.contract.TerminateContractRequest;
 import com.example.boardinghouse.dto.contract.UpdateContractRequest;
+import com.example.boardinghouse.dto.contract.UpdateContractTenantsRequest;
 import com.example.boardinghouse.service.ContractService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -94,5 +96,31 @@ public class ContractController {
     ) {
         Contract contract = contractService.renewContract(id, request);
         return ApiResponse.success("Contract renewed successfully", contract);
+    }
+
+    /**
+     * API: Cập nhật danh sách khách thuê trong hợp đồng.
+     * Endpoint: PATCH /api/contracts/{id}/tenants
+     */
+    @PatchMapping("/{id}/tenants")
+    public ApiResponse<Contract> updateTenants(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateContractTenantsRequest request
+    ) {
+        Contract contract = contractService.updateTenants(id, request);
+        return ApiResponse.success("Tenants updated successfully", contract);
+    }
+
+    /**
+     * API: Đổi phòng cho hợp đồng đang hoạt động.
+     * Endpoint: PATCH /api/contracts/{id}/switch-room
+     */
+    @PatchMapping("/{id}/switch-room")
+    public ApiResponse<Contract> switchRoom(
+            @PathVariable String id,
+            @Valid @RequestBody SwitchRoomRequest request
+    ) {
+        Contract contract = contractService.switchRoom(id, request);
+        return ApiResponse.success("Room switched successfully", contract);
     }
 }

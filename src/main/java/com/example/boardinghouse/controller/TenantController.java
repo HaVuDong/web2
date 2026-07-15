@@ -89,4 +89,14 @@ public class TenantController {
     public ApiResponse<List<Tenant>> getTenantsByRoomId(@PathVariable String roomId) {
         return ApiResponse.success(tenantService.getTenantsByRoomId(roomId));
     }
+
+    /**
+     * API: Tạo tài khoản và gửi email mời khách thuê đăng nhập.
+     * Endpoint: POST /api/tenants/{id}/invite
+     */
+    @PostMapping("/tenants/{id}/invite")
+    public ApiResponse<Void> generateAndSendInvite(@PathVariable String id) {
+        tenantService.generateAndSendInvite(id);
+        return ApiResponse.success("Đã gửi email mời đăng nhập cho khách thuê", null);
+    }
 }

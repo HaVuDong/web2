@@ -21,6 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class TenantService {
@@ -30,6 +33,8 @@ public class TenantService {
     private final MongoTemplate mongoTemplate;
     private final CurrentUserService currentUserService;
     private final RealtimeEventPublisher realtimeEventPublisher;
+    private final EmailService emailService;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * Lấy danh sách khách thuê trọ dựa trên từ khóa tìm kiếm (tên, số điện thoại) và trạng thái.
@@ -181,6 +186,31 @@ public class TenantService {
         }
 
         return tenantRepository.findByCurrentRoomIdAndOwnerId(roomId, ownerId);
+    }
+
+    public void generateAndSendInvite(String tenantId) {
+        Tenant tenant = getTenantById(tenantId);
+        if (!StringUtils.hasText(tenant.getEmail())) {
+            throw new BadRequestException("Khách thuê không có địa chỉ email. Vui lòng cập nhật email trước.");
+        }
+        
+        String rawPassword = UUID.randomUUID().toString().substring(0, 8);
+        tenant.setPasswordHash(passwordEncoder.encode(rawPassword));
+        tenantRepository.save(tenant);
+        
+        emailService.sendTenantInviteEmail(tenant.getEmail(), tenant.getFullName(), rawPassword);
+    }
+
+    public void changePassword(String tenantId, String oldPassword, String newPassword) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khách thuê không tồn tại"));
+
+        if (!passwordEncoder.matches(oldPassword, tenant.getPasswordHash())) {
+            throw new BadRequestException("Mật khẩu cũ không chính xác");
+        }
+
+        tenant.setPasswordHash(passwordEncoder.encode(newPassword));
+        tenantRepository.save(tenant);
     }
 
     /**

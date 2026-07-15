@@ -10,8 +10,10 @@ import com.example.boardinghouse.domain.enums.RoomStatus;
 import com.example.boardinghouse.domain.enums.TenantStatus;
 import com.example.boardinghouse.dto.contract.CreateContractRequest;
 import com.example.boardinghouse.dto.contract.RenewContractRequest;
+import com.example.boardinghouse.dto.contract.SwitchRoomRequest;
 import com.example.boardinghouse.dto.contract.TerminateContractRequest;
 import com.example.boardinghouse.dto.contract.UpdateContractRequest;
+import com.example.boardinghouse.dto.contract.UpdateContractTenantsRequest;
 import com.example.boardinghouse.repository.ContractRepository;
 import com.example.boardinghouse.repository.RoomRepository;
 import com.example.boardinghouse.repository.TenantRepository;
@@ -223,6 +225,138 @@ public class ContractService {
         auditService.log("RENEW", "CONTRACT", saved.getId(), null, saved);
         realtimeEventPublisher.publishGlobalUpdate();
         return saved;
+    }
+
+    /**
+     * Đổi phòng cho hợp đồng đang hoạt động.
+     * Chỉ áp dụng cho hợp đồng ACTIVE. Phòng mới phải ở trạng thái AVAILABLE.
+     * Sau khi đổi:
+     *  - Phòng cũ → AVAILABLE
+     *  - Phòng mới → OCCUPIED
+     *  - Cập nhật roomId trên hợp đồng
+     *  - Cập nhật currentRoomId trên tất cả khách thuê trong hợp đồng
+     *
+     * @param id ID hợp đồng
+     * @param request Thông tin đổi phòng (newRoomId, note)
+     * @return Hợp đồng sau khi đổi phòng
+     */
+    public Contract switchRoom(String id, SwitchRoomRequest request) {
+        String ownerId = currentUserService.getOwnerId();
+        Contract contract = getContractById(id);
+
+        if (contract.getStatus() != ContractStatus.ACTIVE) {
+            throw new BadRequestException("Only active contract can switch room");
+        }
+
+        Room oldRoom = getRoom(contract.getRoomId(), ownerId);
+        Room newRoom = getRoom(request.getNewRoomId(), ownerId);
+
+        if (oldRoom.getId().equals(newRoom.getId())) {
+            throw new BadRequestException("New room must be different from current room");
+        }
+
+        if (newRoom.getStatus() != RoomStatus.AVAILABLE) {
+            throw new BadRequestException("New room must be available to switch");
+        }
+
+        ensureRoomHasNoActiveContract(newRoom.getId(), ownerId);
+        validateRoomCapacity(newRoom, contract.getTenantIds());
+
+        String oldRoomId = contract.getRoomId();
+        contract.setRoomId(newRoom.getId());
+        if (request.getNote() != null) {
+            contract.setNote(request.getNote());
+        }
+
+        Contract savedContract = contractRepository.save(contract);
+        auditService.log("SWITCH_ROOM", "CONTRACT", savedContract.getId(), null, savedContract);
+
+        try {
+            oldRoom.setStatus(RoomStatus.AVAILABLE);
+            roomRepository.save(oldRoom);
+
+            newRoom.setStatus(RoomStatus.OCCUPIED);
+            roomRepository.save(newRoom);
+
+            List<Tenant> tenants = contract.getTenantIds().stream()
+                    .map(tenantId -> tenantRepository.findByIdAndOwnerId(tenantId, ownerId))
+                    .flatMap(Optional::stream)
+                    .toList();
+            tenants.forEach(tenant -> tenant.setCurrentRoomId(newRoom.getId()));
+            tenantRepository.saveAll(tenants);
+        } catch (Exception e) {
+            contract.setRoomId(oldRoomId);
+            contractRepository.save(contract);
+            throw new RuntimeException("Failed to switch room, rolled back contract.", e);
+        }
+
+        realtimeEventPublisher.publishGlobalUpdate();
+        return savedContract;
+    }
+
+    /**
+     * Cập nhật danh sách khách thuê của hợp đồng đang hoạt động.
+     * Thêm khách mới vào phòng hoặc xóa khách cũ khỏi phòng.
+     *
+     * @param id ID hợp đồng
+     * @param request Dữ liệu cập nhật khách thuê
+     * @return Hợp đồng sau khi cập nhật
+     */
+    public Contract updateTenants(String id, UpdateContractTenantsRequest request) {
+        String ownerId = currentUserService.getOwnerId();
+        Contract contract = getContractById(id);
+
+        if (contract.getStatus() != ContractStatus.ACTIVE) {
+            throw new BadRequestException("Only active contract can update tenants");
+        }
+
+        List<String> newTenantIds = normalizeTenantIds(request.getTenantIds());
+        List<String> oldTenantIds = contract.getTenantIds();
+
+        Room room = getRoom(contract.getRoomId(), ownerId);
+        validateRoomCapacity(room, newTenantIds);
+
+        List<String> addedTenantIds = newTenantIds.stream()
+                .filter(tenantId -> !oldTenantIds.contains(tenantId))
+                .toList();
+        List<String> removedTenantIds = oldTenantIds.stream()
+                .filter(tenantId -> !newTenantIds.contains(tenantId))
+                .toList();
+
+        if (!addedTenantIds.isEmpty()) {
+            ensureTenantsHaveNoActiveContract(addedTenantIds, ownerId);
+        }
+
+        List<Tenant> allTenantsToSave = new java.util.ArrayList<>();
+
+        if (!removedTenantIds.isEmpty()) {
+            List<Tenant> removedTenants = getTenants(removedTenantIds, ownerId);
+            removedTenants.forEach(t -> {
+                t.setCurrentRoomId(null);
+                t.setStatus(TenantStatus.LEFT);
+            });
+            allTenantsToSave.addAll(removedTenants);
+        }
+
+        if (!addedTenantIds.isEmpty()) {
+            List<Tenant> addedTenants = getTenants(addedTenantIds, ownerId);
+            addedTenants.forEach(t -> {
+                t.setCurrentRoomId(room.getId());
+                t.setStatus(TenantStatus.ACTIVE);
+            });
+            allTenantsToSave.addAll(addedTenants);
+        }
+
+        contract.setTenantIds(newTenantIds);
+        Contract savedContract = contractRepository.save(contract);
+        auditService.log("UPDATE_TENANTS", "CONTRACT", savedContract.getId(), null, savedContract);
+
+        if (!allTenantsToSave.isEmpty()) {
+            tenantRepository.saveAll(allTenantsToSave);
+        }
+
+        realtimeEventPublisher.publishGlobalUpdate();
+        return savedContract;
     }
 
     /**

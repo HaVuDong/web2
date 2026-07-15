@@ -21,8 +21,8 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
     @Query("{'roomId': ?0, 'month': ?1, 'year': ?2, 'deleted': {$ne: true}}")
     Optional<Invoice> findByRoomIdAndMonthAndYear(String roomId, Integer month, Integer year);
 
-    @Query("{'roomId': ?0, 'ownerId': ?1, 'month': ?2, 'year': ?3, 'deleted': {$ne: true}}")
-    Optional<Invoice> findByRoomIdAndOwnerIdAndMonthAndYear(String roomId, String ownerId, Integer month, Integer year);
+    @Query("{'roomId': ?0, 'ownerId': ?1, 'month': ?2, 'year': ?3, 'status': {$ne: 'CANCELLED'}, 'deleted': {$ne: true}}")
+    Optional<Invoice> findActiveByRoomIdAndOwnerIdAndMonthAndYear(String roomId, String ownerId, Integer month, Integer year);
 
     @Query("{'roomId': ?0, 'deleted': {$ne: true}}")
     List<Invoice> findByRoomId(String roomId);

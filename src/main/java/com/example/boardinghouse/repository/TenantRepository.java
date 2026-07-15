@@ -12,6 +12,7 @@ import java.util.Optional;
  * Repository (DAO) để thao tác với collection Tenant (Khách thuê) trong MongoDB.
  */
 public interface TenantRepository extends MongoRepository<Tenant, String> {
+    Optional<Tenant> findByEmailAndDeletedNot(String email, Boolean deleted);
     @Query("{'ownerId': ?0, 'deleted': {$ne: true}}")
     List<Tenant> findByOwnerId(String ownerId);
 

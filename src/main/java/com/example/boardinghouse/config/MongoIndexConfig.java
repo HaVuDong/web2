@@ -57,14 +57,17 @@ public class MongoIndexConfig {
                         .partial(() -> new Document("deleted", false))
         );
 
-        // 5. Invoice: Một tháng chỉ có 1 hóa đơn cho một phòng
+        // 5. Invoice: Một tháng chỉ có 1 hóa đơn Không-Bị-Hủy cho một phòng
+        try {
+            mongoTemplate.indexOps(Invoice.class).dropIndex("roomId_1_month_1_year_1");
+        } catch (Exception e) {
+            // Ignore if index doesn't exist
+        }
         mongoTemplate.indexOps(Invoice.class).ensureIndex(
                 new Index()
                         .on("roomId", Sort.Direction.ASC)
                         .on("month", Sort.Direction.ASC)
                         .on("year", Sort.Direction.ASC)
-                        .unique()
-                        .partial(() -> new Document("deleted", false))
         );
 
 

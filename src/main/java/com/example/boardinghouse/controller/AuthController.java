@@ -41,11 +41,15 @@ public class AuthController {
         
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
 
+        boolean isTenant = userDetails.getTenant() != null;
+        String name = isTenant ? userDetails.getTenant().getFullName() : userDetails.getUser().getName();
+        String role = isTenant ? "TENANT" : userDetails.getUser().getRole().name();
+
         JwtResponse response = JwtResponse.builder()
                 .token(jwt)
                 .email(userDetails.getUsername())
-                .name(userDetails.getUser().getName())
-                .role(userDetails.getUser().getRole().name())
+                .name(name)
+                .role(role)
                 .build();
 
         return ApiResponse.success("Login successful", response);

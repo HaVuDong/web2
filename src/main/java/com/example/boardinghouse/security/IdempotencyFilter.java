@@ -75,9 +75,15 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
         
-        String ownerId = userDetails.getUser().getId();
+        String userId = userDetails.getUser() != null ? userDetails.getUser().getId() : 
+                        (userDetails.getTenant() != null ? userDetails.getTenant().getId() : null);
+
+        if (userId == null) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+            return;
+        }
         
-        Optional<IdempotencyRecord> existingRecordOpt = idempotencyRecordRepository.findByIdempotencyKeyAndOwnerId(idempotencyKey, ownerId);
+        Optional<IdempotencyRecord> existingRecordOpt = idempotencyRecordRepository.findByIdempotencyKeyAndOwnerId(idempotencyKey, userId);
 
         if (existingRecordOpt.isPresent()) {
             IdempotencyRecord record = existingRecordOpt.get();
@@ -101,7 +107,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 
         // Tạo record mới (status PROCESSING)
         IdempotencyRecord record = IdempotencyRecord.builder()
-                .ownerId(ownerId)
+                .ownerId(userId)
                 .idempotencyKey(idempotencyKey)
                 .method(request.getMethod())
                 .requestPath(request.getRequestURI())
