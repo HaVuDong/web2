@@ -17,11 +17,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Document(collection = "invoices")
-@CompoundIndex(
-        name = "unique_invoice_per_room_month",
-        def = "{'roomId': 1, 'month': 1, 'year': 1}",
-        unique = true
-)
 @Data
 @Builder
 @NoArgsConstructor

@@ -28,6 +28,8 @@ import com.example.boardinghouse.security.CurrentUserService;
 import com.example.boardinghouse.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import jakarta.annotation.PostConstruct;
 
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -38,6 +40,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InvoiceService {
 
+    private final MongoTemplate mongoTemplate;
     private final InvoiceRepository invoiceRepository;
     private final RoomRepository roomRepository;
     private final ContractRepository contractRepository;
@@ -48,6 +51,15 @@ public class InvoiceService {
     private final CurrentUserService currentUserService;
     private final AuditService auditService;
     private final RealtimeEventPublisher realtimeEventPublisher;
+
+    @PostConstruct
+    public void init() {
+        try {
+            mongoTemplate.indexOps("invoices").dropIndex("unique_invoice_per_room_month");
+        } catch (Exception e) {
+            // Index might not exist, ignore
+        }
+    }
 
     /**
      * Lấy danh sách toàn bộ hóa đơn.
